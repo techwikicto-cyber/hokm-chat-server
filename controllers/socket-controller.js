@@ -48,10 +48,12 @@ function FormatTimestamp(dbTime) {
   return isNaN(parsed) ? Date.now() : parsed;
 }
 
-
-function SavePublicChatToMySQL(message, messageTime, userId, userName, userUniquename, userAvatarId, userLevel ) {
+function SavePublicChatToMySQL(message, messageTime, userId, userName, userUniquename, userAvatarId, userLevel) {
   const query = 'INSERT INTO public_chat (user_id, user_name, message, message_time, user_uniquename, user_avatar_id, user_level) VALUES (?, ?, ?, ?, ?, ?, ?)';
-  mysqlConnection.query(query, [userId, userName, message, messageTime, userUniquename || null, userAvatarId || 0, userLevel || 0]);
+  const params = [userId, userName, message, messageTime, userUniquename || null, userAvatarId || 0, userLevel || 0];
+  mysqlConnection.query(query, params, (err) => {
+    if (err) console.error('[MySQL] SavePublicChat ERROR:', err.message);
+  });
 }
 
 function SavePrivateChatToMySQL(roomName, message, messageTime, userId, userName, userAvatarId, userLevel, userUniquename) {
