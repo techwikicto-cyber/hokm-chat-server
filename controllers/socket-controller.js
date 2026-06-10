@@ -1,31 +1,16 @@
 const socket = require("socket.io");
 const http = require('http');
 const crypto = require('crypto');
-const loki = require("lokijs");
 const mysql = require('mysql2');
-const path = require('path');
+const redis = require('redis');
+const { promisify } = require('util');
 
 const config = require('../config');
-const Queue = require('../classes/queue');
-const PrivateChatRoomObject = require('../objects/private-chat-room-object');
 
 const AES_KEY = Buffer.from(config.AES_ENCRYPTION_SECRET_KEY);
 const IV_LENGTH = 16;
 
-// Database & State
-const dbPath = path.join(__dirname, '..', 'chat.hokm.db');
-const db = new loki(dbPath, {
-  autoload: true,
-  autoloadCallback: () => {},
-  autosave: true,
-  autosaveInterval: 4000
-});
-
-let publicChatMessagesCollection;
-let privateChatRooms = [];
-const userMessageTimestamps = {}; // anti-flood
-
-// MySQL connection
+// ===================== MySQL Connection =====================
 const mysqlConnection = mysql.createConnection({
   host: config.MYSQL_HOST,
   user: config.MYSQL_USER,
@@ -34,15 +19,39 @@ const mysqlConnection = mysql.createConnection({
 });
 mysqlConnection.connect();
 
+// ===================== Redis Connection (For Anti-Flood) =====================
+const redisClient = redis.createClient({
+  host: config.REDIS_IP,
+  port: config.REDIS_PORT
+});
+
+const getRedisAsync = promisify(redisClient.get).bind(redisClient);
+const setexRedisAsync = promisify(redisClient.setex).bind(redisClient);
+
+// ===================== Helpers =====================
 function FormatUsernameForDisplay(username) {
   return username && username.length > 8
     ? username.substring(0, 8) + '...'
     : (username || '');
 }
 
-function SavePublicChatToMySQL(message, messageTime, userId, userName, userUniquename) {
-  const query = 'INSERT INTO public_chat (user_id, user_name, message, message_time, user_uniquename) VALUES (?, ?, ?, ?, ?)';
-  mysqlConnection.query(query, [userId, userName, message, messageTime, userUniquename || null]);
+function FormatTimestamp(dbTime) {
+  if (!dbTime) return Date.now();
+  if (dbTime instanceof Date) return dbTime.getTime();
+
+  const num = Number(dbTime);
+  if (!isNaN(num) && num > 0) {
+    return num;
+  }
+
+  const parsed = new Date(dbTime).getTime();
+  return isNaN(parsed) ? Date.now() : parsed;
+}
+
+
+function SavePublicChatToMySQL(message, messageTime, userId, userName, userUniquename, userAvatarId, userLevel ) {
+  const query = 'INSERT INTO public_chat (user_id, user_name, message, message_time, user_uniquename, user_avatar_id, user_level) VALUES (?, ?, ?, ?, ?, ?, ?)';
+  mysqlConnection.query(query, [userId, userName, message, messageTime, userUniquename || null, userAvatarId || 0, userLevel || 0]);
 }
 
 function SavePrivateChatToMySQL(roomName, message, messageTime, userId, userName, userAvatarId, userLevel, userUniquename) {
@@ -51,9 +60,31 @@ function SavePrivateChatToMySQL(roomName, message, messageTime, userId, userName
   mysqlConnection.query(query, [roomName, userId, userName, message, messageTime, userAvatarId, userLevel, userUniquename || null]);
 }
 
+function GetPublicChatsFromMySQL(callback) {
+  const query = 'SELECT * FROM public_chat ORDER BY id DESC LIMIT ?';
+  mysqlConnection.query(query, [config.MAXIMUM_PUBLIC_ROOM_CHATS_LENGTH], (error, results) => {
+    if (error) return callback([]);
+
+    // مرتب‌سازی برعکس برای نمایش درست در کلاینت چت
+    const formattedChats = results.reverse().map(chat => ({
+      sender_details: {
+        user_id: chat.user_uniquename || chat.user_id,
+        user_name: FormatUsernameForDisplay(chat.user_name),
+        user_avatar_id: chat.user_avatar_id || 0 ,
+        user_uniquename: chat.user_uniquename || "",
+        user_level: chat.user_level || 0
+      },
+      message: chat.message,
+      message_time: FormatTimestamp(chat.message_time), // اصلاح زمان چت‌های قدیمی عمومی
+      is_emoji_active: config.IS_EMOJI_ACTIVE
+    }));
+    callback(formattedChats);
+  });
+}
+
 function GetPrivateChatsFromMySQL(roomName, callback) {
-  const query = 'SELECT * FROM private_chat WHERE room_name = ? ORDER BY id DESC LIMIT 20';
-  mysqlConnection.query(query, [roomName], (error, results) => {
+  const query = 'SELECT * FROM private_chat WHERE room_name = ? ORDER BY id DESC LIMIT ?';
+  mysqlConnection.query(query, [roomName, config.MAXIMUM_PRIVATE_ROOM_CHATS_LENGTH], (error, results) => {
     if (error) return callback([]);
     const formattedChats = results.reverse().map(chat => ({
       sender_details: {
@@ -64,9 +95,9 @@ function GetPrivateChatsFromMySQL(roomName, callback) {
         user_level: chat.user_level || 0
       },
       message: chat.message,
-      message_time: chat.message_time,
+      message_time: FormatTimestamp(chat.message_time), // اصلاح زمان چت‌های قدیمی خصوصی
       is_emoji_active: config.IS_EMOJI_ACTIVE,
-      meta: { revision: 0, created: chat.message_time, version: 0 },
+      meta: { revision: 0, created: FormatTimestamp(chat.message_time), version: 0 },
       $loki: chat.id
     }));
     callback(formattedChats);
@@ -83,7 +114,7 @@ function RemovePhoneNumber(str) {
   return str.replace(/((9|09)[0-9]{9})/g, "");
 }
 
-// Encryption helpers
+// ===================== Encryption Helpers =====================
 function EncryptData(text) {
   const iv = crypto.randomBytes(IV_LENGTH);
   const cipher = crypto.createCipheriv('aes-256-cbc', AES_KEY, iv);
@@ -106,16 +137,7 @@ function DecryptData(text) {
   }
 }
 
-function GetFirstDBCollectionItem() {
-  const data = publicChatMessagesCollection.find();
-  return data && data[0];
-}
-
-function GetPrivateChatRoomIndex(roomName) {
-  return privateChatRooms.findIndex(i => i.roomName === roomName);
-}
-
-// ===================== UGC FILTER (بدون هیچ ریسپانسی) =====================
+// ===================== UGC FILTER =====================
 async function isMessageClean(chatMessage) {
   if (!chatMessage || chatMessage.trim() === '') return true;
 
@@ -159,35 +181,34 @@ async function isMessageClean(chatMessage) {
     return true;
   }
 }
-// =====================================================
 
+// ===================== Messaging Logic =====================
 async function sendChatMessageAsync(cSocket, userDetails, roomName, chatMessage) {
   const userId = userDetails.user_id;
   const now = Date.now();
-  const coolDownMs = 8000;
+  const coolDownSeconds = 8;
 
-  if (now - (userMessageTimestamps[userId] || 0) < coolDownMs) {
-    const waitSec = ((coolDownMs - (now - userMessageTimestamps[userId])) / 1000).toFixed(1);
-    const response = { type: "error", message: `Please wait ${waitSec} seconds before sending.` };
+  // Anti-Flood کنترل هوشمند اسپم با ردیس روی کلستر
+  const redisKey = `chat_cooldown:${userId}`;
+  const isBlocked = await getRedisAsync(redisKey);
+
+  if (isBlocked) {
+    const response = { type: "error", message: `Please wait before sending another message.` };
     cSocket.emit('get_data', { data: EncryptData(JSON.stringify(response)) });
     return;
   }
 
   const cleanMsg = RemovePhoneNumber(RemoveSpecialCharacters(chatMessage));
 
-  // فیلتر UGC — بدون هیچ پاسخی به کاربر
+  // UGC Filter
   if (!(await isMessageClean(cleanMsg))) {
-    return; // پیام بلاک شد و هیچ ریسپانسی ارسال نمی‌شود
+    return;
   }
 
-  userMessageTimestamps[userId] = now;
+  // ثبت کول‌داون در ردیس
+  await setexRedisAsync(redisKey, coolDownSeconds, '1');
 
   if (roomName === config.PUBLIC_ROOM_NAME) {
-    try {
-      if (publicChatMessagesCollection.count() >= config.MAXIMUM_PUBLIC_ROOM_CHATS_LENGTH)
-        publicChatMessagesCollection.remove(GetFirstDBCollectionItem());
-    } catch (e) {}
-
     const chatObj = {
       sender_details: {
         user_id: userDetails.user_id,
@@ -197,33 +218,16 @@ async function sendChatMessageAsync(cSocket, userDetails, roomName, chatMessage)
         user_level: userDetails.user_level || 0
       },
       message: cleanMsg,
-      message_time: now,
+      message_time: now, // ارسال لایو تفاوتی ندارد چون عدد خام است
       is_emoji_active: config.IS_EMOJI_ACTIVE
     };
 
-    publicChatMessagesCollection.insert(chatObj);
-    SavePublicChatToMySQL(chatObj.message, chatObj.message_time, userDetails.user_id, userDetails.user_name, userDetails.user_uniquename);
+    SavePublicChatToMySQL(chatObj.message, chatObj.message_time, userDetails.user_id, userDetails.user_name, userDetails.user_uniquename, userDetails.user_avatar_id, userDetails.user_level);
 
     const response = { type: "get_other_user_chat", chat_message_object: chatObj, room_name: roomName };
     cSocket.to(roomName).emit('get_data', { data: EncryptData(JSON.stringify(response)) });
 
   } else {
-    let chatRoomIndex = GetPrivateChatRoomIndex(roomName);
-    if (chatRoomIndex === -1) {
-      const privateChatRoom = Object.create(PrivateChatRoomObject);
-      privateChatRoom.roomName = roomName;
-      privateChatRoom.chatRoomMembersCount = 1;
-      privateChatRoom.chatsQueue = new Queue();
-      privateChatRooms.push(privateChatRoom);
-      chatRoomIndex = privateChatRooms.length - 1;
-    }
-
-    const chatRoom = privateChatRooms[chatRoomIndex];
-
-    if (chatRoom.chatsQueue.length >= config.MAXIMUM_PRIVATE_ROOM_CHATS_LENGTH) {
-      chatRoom.chatsQueue.dequeue();
-    }
-
     const chatObj = {
       sender_details: {
         user_id: userDetails.user_uniquename || userDetails.user_id,
@@ -235,11 +239,9 @@ async function sendChatMessageAsync(cSocket, userDetails, roomName, chatMessage)
       message: cleanMsg,
       message_time: now,
       is_emoji_active: config.IS_EMOJI_ACTIVE,
-      meta: { revision: 0, created: now, version: 0 },
-      $loki: chatRoom.chatsQueue.length + 1
+      meta: { revision: 0, created: now, version: 0 }
     };
 
-    chatRoom.chatsQueue.enqueue(chatObj);
     SavePrivateChatToMySQL(roomName, chatObj.message, chatObj.message_time, userDetails.user_id, userDetails.user_name, userDetails.user_avatar_id, userDetails.user_level, userDetails.user_uniquename);
 
     const response = { type: "get_other_user_chat", chat_message_object: chatObj, room_name: roomName };
@@ -253,55 +255,35 @@ function SendChatMessage(cSocket, userDetails, roomName, chatMessage) {
 }
 
 // ===================== MAIN INITIALIZATION =====================
-exports.InitializeClientsSocketIO = function (server, mainDb) {
-  if (!mainDb) return;
-  publicChatMessagesCollection = mainDb.getCollection("public_chat_messages") || mainDb.addCollection("public_chat_messages");
-
+exports.InitializeClientsSocketIO = function (server) {
   const io = socket(server);
 
-  // ===================== Redis Adapter با Key جداگانه =====================
+  // ===================== Redis Adapter =====================
   if (config.SHOULD_USE_NGINX_REDIS) {
     try {
-      const serviceName = process.env.SERVICE_NAME || 'hokm';   // ← از محیط می‌خواند
+      const serviceName = process.env.SERVICE_NAME || 'hokm';
       const redisKey = `socket.io:${serviceName}`;
 
       const redisAdapter = require('socket.io-redis');
       io.adapter(redisAdapter({
         host: config.REDIS_IP,
         port: config.REDIS_PORT,
-        key: redisKey                    // ← کلیدی متفاوت برای هر سرویس
+        key: redisKey
       }));
 
       console.log(`[SOCKET.IO] Redis adapter ENABLED → ${config.REDIS_IP}:${config.REDIS_PORT} | Service: ${serviceName} | Key: ${redisKey}`);
     } catch (err) {
       console.error('[SOCKET.IO] Redis adapter failed to load:', err.message);
     }
-  } else {
-    console.log('[SOCKET.IO] Redis adapter disabled (SHOULD_USE_NGINX_REDIS = false)');
   }
-  // =================================================================
 
   io.on("connection", function (clientSocket) {
     let thisUserDetails = null;
     let currentPrivateChatRoomName = '';
-    let isJoinedToPublicRoom = false;
-    let isJoinedToPrivateRoom = false;
 
     clientSocket.on('disconnect', function () {
-      if (thisUserDetails && currentPrivateChatRoomName) {
-        const chatRoomIndex = GetPrivateChatRoomIndex(currentPrivateChatRoomName);
-        if (chatRoomIndex !== -1) {
-          privateChatRooms[chatRoomIndex].chatRoomMembersCount =
-            Math.max(0, privateChatRooms[chatRoomIndex].chatRoomMembersCount - 1);
-          if (privateChatRooms[chatRoomIndex].chatRoomMembersCount <= 0) {
-            privateChatRooms.splice(chatRoomIndex, 1);
-          }
-        }
-      }
       thisUserDetails = null;
       currentPrivateChatRoomName = '';
-      isJoinedToPublicRoom = false;
-      isJoinedToPrivateRoom = false;
     });
 
     clientSocket.on('get_user_details', function (request) {
@@ -321,19 +303,15 @@ exports.InitializeClientsSocketIO = function (server, mainDb) {
       }
 
       clientSocket.join(config.PUBLIC_ROOM_NAME);
-      isJoinedToPublicRoom = true;
 
-      let publicChatMessages = [];
-      try {
-        publicChatMessages = publicChatMessagesCollection.find().slice(0, 5);
-      } catch (e) {}
-
-      clientSocket.emit('get_data', {
-        data: EncryptData(JSON.stringify({
-          type: "get_privious_public_chats",
-          public_chats: publicChatMessages,
-          is_emoji_active: config.IS_EMOJI_ACTIVE
-        }))
+      GetPublicChatsFromMySQL((publicChatMessages) => {
+        clientSocket.emit('get_data', {
+          data: EncryptData(JSON.stringify({
+            type: "get_privious_public_chats",
+            public_chats: publicChatMessages,
+            is_emoji_active: config.IS_EMOJI_ACTIVE
+          }))
+        });
       });
     });
 
@@ -343,28 +321,10 @@ exports.InitializeClientsSocketIO = function (server, mainDb) {
 
       if (currentPrivateChatRoomName && currentPrivateChatRoomName !== newRoomName) {
         clientSocket.leave(currentPrivateChatRoomName);
-        const oldIndex = GetPrivateChatRoomIndex(currentPrivateChatRoomName);
-        if (oldIndex !== -1) {
-          privateChatRooms[oldIndex].chatRoomMembersCount = Math.max(0, privateChatRooms[oldIndex].chatRoomMembersCount - 1);
-          if (privateChatRooms[oldIndex].chatRoomMembersCount <= 0)
-            privateChatRooms.splice(oldIndex, 1);
-        }
       }
 
       clientSocket.join(newRoomName);
       currentPrivateChatRoomName = newRoomName;
-      isJoinedToPrivateRoom = true;
-
-      let roomIndex = GetPrivateChatRoomIndex(newRoomName);
-      if (roomIndex === -1) {
-        const privateChatRoom = Object.create(PrivateChatRoomObject);
-        privateChatRoom.roomName = newRoomName;
-        privateChatRoom.chatRoomMembersCount = 1;
-        privateChatRoom.chatsQueue = new Queue();
-        privateChatRooms.push(privateChatRoom);
-      } else {
-        privateChatRooms[roomIndex].chatRoomMembersCount++;
-      }
 
       GetPrivateChatsFromMySQL(newRoomName, (privateChats) => {
         clientSocket.emit('get_data', {

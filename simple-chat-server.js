@@ -1,7 +1,6 @@
 const express = require("express");
 const bodyParser = require("body-parser");
 const cors = require("cors");
-const loki = require("lokijs");
 const path = require("path");
 
 const socketController = require("./controllers/socket-controller");
@@ -9,13 +8,13 @@ const socketController = require("./controllers/socket-controller");
 const app = express();
 
 // ===================== ENV SAFE =====================
-const PORT = Number(process.env.LISTEN_PORT || 3008);
+const PORT = Number(process.env.LISTEN_PORT || 3006);
 
 // ===================== Middleware =====================
 app.use(bodyParser.json());
 app.use(bodyParser.urlencoded({ extended: true }));
 
-// فقط در production cors
+// ﻒﻋﺎﻟ<200c>ﺳﺍﺰﯾ CORS ﻒﻘﻃ ﺩﺭ ﻢﺤﯿﻃ Production ﯼﺍ ﻂﺒﻗ ﺖﻨﻈﯿﻣﺎﺗ ﺲﯿﺴﺘﻣ
 if (process.env.IS_LOCAL !== "true") {
   app.use(cors({ origin: process.env.CORS_ORIGIN || "*" }));
 }
@@ -38,25 +37,13 @@ if (global.__APP_STARTED__) {
 
 global.__APP_STARTED__ = true;
 
-// ===================== DB + SERVER =====================
-const db = new loki(path.join(__dirname, "chat.hokm.db"), {
-  autoload: true,
+// ===================== SERVER START =====================
+// ﺱﺭﻭﺭ ﻢﺴﺘﻘﯿﻣﺍً ﻭ ﺏﺩﻮﻧ ﻢﻌﻄﻠﯾ ﺏﺭﺎﯾ ﺪﯿﺗﺎﺒﯿﺳ ﻢﺤﻠﯾ LokiJS ﺎﺴﺗﺍﺮﺗ ﻢﯾ<200c>ﺷﻭﺩ
+const server = app.listen(PORT, () => {
+  console.log(`[Worker ${process.pid}] Server running on port ${PORT}`);
 
-  autoloadCallback: () => {
-    console.log(`[Worker ${process.pid}] LokiDB loaded`);
-
-    // 🔥 IMPORTANT: always use PORT constant (NOT config)
-    const server = app.listen(PORT, () => {
-      console.log(`[Worker ${process.pid}] Server running on port ${PORT}`);
-
-      socketController.InitializeClientsSocketIO(server, db);
-    });
-  },
-
-  autosave: true,
-  autosaveInterval: 4000,
-  env: "NODEJS",
-  serializationMethod: "pretty",
+  // ﻢﻗﺩﺍﺭﺪﻬﯾ ﺍﻮﻠﯿﻫ ﺐﻫ ﮎﻼﯿﻨﺗ<200c>ﻫﺍ ﻭ ﭖﺭﻮﺘﮑﻟ<200c>ﻫﺎﯾ ﺱﻮﮑﺗ
+  socketController.InitializeClientsSocketIO(server);
 });
 
 module.exports = app;
