@@ -18,14 +18,21 @@
 cd test-client
 cp tester.env.example tester.env    # آدرس سرور و کلید AES را داخلش بگذارید
 
-docker compose run --rm tester              # عیب‌یابی شبکه + همه تست‌ها
-docker compose run --rm tester --diagnose   # فقط شبکه
-docker compose run --rm tester --verbose    # با لاگ کامل هر پیام
-docker compose run --rm tester --json       # خروجی ماشین‌خوان
-docker compose up ui                        # حالت مرورگر روی :8080
+docker compose run --build --rm tester              # عیب‌یابی شبکه + همه تست‌ها
+docker compose run --build --rm tester --diagnose   # فقط شبکه
+docker compose run --build --rm tester --verbose    # با لاگ کامل هر پیام
+docker compose run --build --rm tester --json       # خروجی ماشین‌خوان
+docker compose up --build ui                        # حالت مرورگر روی :8080
 ```
 
 هر آرگومانی که بعد از `tester` بنویسید مستقیم به `cli.js` می‌رسد.
+
+`--build` را جدی بگیرید: کامپوز وقتی ایمیج از قبل وجود داشته باشد دوباره build
+نمی‌کند، حتی اگر `Dockerfile` عوض شده باشد. اگر بعد از یک `git pull` رفتار قدیمی
+دیدید، تقریباً همیشه علتش همین است.
+
+اگر هشدار `The "C" variable is not set` دیدید، یعنی یک فایل `.env` در این پوشه
+مانده — با `rm -f .env` پاکش کنید.
 
 سرویس `tester` با `network_mode: host` اجرا می‌شود، پس اگر سرور چت روی همان ماشین
 است `CHAT_URL=http://127.0.0.1:3008` کار می‌کند. روی Docker Desktop مک/ویندوز این
