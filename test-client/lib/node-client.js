@@ -75,7 +75,8 @@ class NodeChatClient {
 
       this.socket.on('connect', () => {
         clearTimeout(timer);
-        this.log('sys', 'متصل شد → socket id = ' + this.socket.id);
+        this.transport = this.currentTransport();
+        this.log('sys', `متصل شد → socket id = ${this.socket.id}، transport = ${this.transport}`);
         resolve();
       });
       this.socket.on('connect_error', (err) => {
@@ -86,6 +87,16 @@ class NodeChatClient {
   }
 
   isConnected() { return !!(this.socket && this.socket.connected); }
+
+  // چت کاملاً روی سوکت است، نه درخواست/پاسخ HTTP. این می‌گوید عملاً روی کدام
+  // transport نشسته‌ایم: websocket یا polling (که fallback روی HTTP است).
+  currentTransport() {
+    try {
+      return this.socket.io.engine.transport.name;
+    } catch (e) {
+      return 'unknown';
+    }
+  }
 
   close() {
     if (this.socket) { this.socket.close ? this.socket.close() : this.socket.disconnect(); this.socket = null; }

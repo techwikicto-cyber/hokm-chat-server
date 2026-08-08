@@ -2,9 +2,10 @@ FROM node:20-alpine
 
 WORKDIR /app
 
-# اول فقط package.json تا لایه نصب پکیج‌ها کش شود
-COPY package.json ./
-RUN npm install --omit=dev --no-audit --no-fund
+# اول فقط مانیفست‌ها تا لایه نصب پکیج‌ها کش شود.
+# با lock فایل، build تکرارپذیر است و همان نسخه‌هایی نصب می‌شود که تست شده.
+COPY package.json package-lock.json ./
+RUN npm ci --omit=dev --no-audit --no-fund
 
 COPY cli.js server.js index.html ./
 COPY lib ./lib

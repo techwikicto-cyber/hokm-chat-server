@@ -12,7 +12,29 @@
 
 ---
 
-## سریع‌ترین راه: Docker
+## سریع‌ترین راه: Docker Compose
+
+```bash
+cd test-client
+cp .env.example .env       # آدرس سرور و کلید AES را داخلش بگذارید
+
+docker compose run --rm tester              # عیب‌یابی شبکه + همه تست‌ها
+docker compose run --rm tester --diagnose   # فقط شبکه
+docker compose run --rm tester --verbose    # با لاگ کامل هر پیام
+docker compose run --rm tester --json       # خروجی ماشین‌خوان
+docker compose up ui                        # حالت مرورگر روی :8080
+```
+
+هر آرگومانی که بعد از `tester` بنویسید مستقیم به `cli.js` می‌رسد.
+
+سرویس `tester` با `network_mode: host` اجرا می‌شود، پس اگر سرور چت روی همان ماشین
+است `CHAT_URL=http://127.0.0.1:3008` کار می‌کند. روی Docker Desktop مک/ویندوز این
+گزینه پشتیبانی نمی‌شود؛ آن خط را کامنت کنید و به‌جای `127.0.0.1` از
+`host.docker.internal` استفاده کنید.
+
+`.env` کلید AES را نگه می‌دارد، پس نه در گیت می‌رود و نه داخل ایمیج.
+
+## بدون Compose
 
 ```bash
 cd test-client

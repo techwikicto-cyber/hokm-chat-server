@@ -265,9 +265,21 @@ async function main() {
     await Promise.all([A.connect(), B.connect()]);
   } catch (err) {
     console.error(red('\n' + err.message));
-    console.error(dim('لایه شبکه سالم بود ولی هندشیک socket.io کامل نشد. با --verbose جزئیات بیشتری می‌بینید.'));
+    // خطای «پکیج نصب نیست» ربطی به شبکه ندارد؛ راهنمای اشتباه ندهیم
+    if (!/npm install/.test(err.message)) {
+      console.error(dim('لایه شبکه سالم بود ولی هندشیک socket.io کامل نشد. با --verbose جزئیات بیشتری می‌بینید.'));
+    }
     openClients.forEach(cl => cl.close());
     process.exit(1);
+  }
+
+  out.transport = A.currentTransport();
+  if (!opts.json) {
+    const note = out.transport === 'websocket'
+      ? 'ارتباط چت روی WebSocket برقرار شد (نه درخواست/پاسخ HTTP)'
+      : `ارتباط چت روی «${out.transport}» برقرار شد — ارتقا به websocket انجام نشده و روی fallback مانده است`;
+    console.log('');
+    console.log('  ' + (out.transport === 'websocket' ? green('✔') : yellow('!')) + ' ' + bold('Transport'.padEnd(11)) + ' ' + note);
   }
 
   // ---------- پیش‌بررسی کلید AES ----------
