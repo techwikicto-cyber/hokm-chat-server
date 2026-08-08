@@ -2,3 +2,4 @@ node_modules/
 *.log
 chat.hokm.db
 test-client/.env
+test-client/tester.env

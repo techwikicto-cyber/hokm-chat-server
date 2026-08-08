@@ -1,6 +1,6 @@
 # تستر چت سرور هکم
 #
-#   cp .env.example .env      و مقادیرش را پر کنید
+#   cp tester.env.example tester.env      و مقادیرش را پر کنید
 #
 #   docker compose run --rm tester              # عیب‌یابی شبکه + همه تست‌ها
 #   docker compose run --rm tester --diagnose   # فقط شبکه
@@ -21,15 +21,15 @@ services:
 
     # با network_mode: host کانتینر شبکه خود ماشین را می‌بیند، پس اگر سرور چت
     # روی همین ماشین است می‌توانید 127.0.0.1 بدهید. برای سرور ریموت هم فرقی نمی‌کند.
-    # روی Docker Desktop (مک/ویندوز) این گزینه کار نمی‌کند — آن را کامنت کنید
+    # روی Docker Desktop (مک/ویندوز) این گزینه پشتیبانی نمی‌شود — آن را کامنت کنید
     # و به‌جای 127.0.0.1 از host.docker.internal استفاده کنید.
     network_mode: host
 
-    environment:
-      CHAT_URL:    ${CHAT_URL:?آدرس سرور چت را در .env تنظیم کنید، مثلاً http://1.2.3.4:3008}
-      AES_KEY:     ${AES_KEY:?کلید AES سرور را در .env تنظیم کنید (دقیقاً ۳۲ کاراکتر)}
-      PUBLIC_ROOM: ${PUBLIC_ROOM:-public_chat_room}
-      TIMEOUT:     ${TIMEOUT:-10000}
+    # تنظیمات مستقیم از فایل خوانده می‌شود، نه با ${...}. این عمدی است:
+    # کامپوز داخل مقدارهایی که interpolate می‌کند دنبال متغیر می‌گردد و
+    # کلید AES که به «$C» ختم می‌شود خراب می‌شد.
+    env_file:
+      - tester.env
 
   # ---------------------------------------------------------------
   # حالت مرورگر — دو کلاینت زنده کنار هم برای تست دستی.
@@ -41,5 +41,5 @@ services:
     image: hokm-chat-tester
     entrypoint: ["node", "server.js"]
     ports:
-      - "${UI_PORT:-8080}:8080"
+      - "8080:8080"
     restart: unless-stopped

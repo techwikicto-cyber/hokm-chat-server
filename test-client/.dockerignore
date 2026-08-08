@@ -3,4 +3,5 @@ npm-debug.log
 *.log
 README.md
 .env
+tester.env
 docker-compose.yml
