@@ -1,0 +1,647 @@
+<!DOCTYPE html>
+<html lang="fa" dir="rtl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>تستر چت سرور هکم</title>
+<style>
+  :root {
+    --bg: #0f1319; --panel: #161c24; --panel-2: #1d2530; --border: #2a3441;
+    --text: #dbe3ec; --muted: #8695a8; --accent: #4da3ff;
+    --ok: #46c98b; --err: #ff6b6b; --warn: #ffb454; --sent: #b78bff;
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; padding: 16px; background: var(--bg); color: var(--text);
+         font-family: Tahoma, "Segoe UI", system-ui, sans-serif; font-size: 13px; }
+  h1 { font-size: 17px; margin: 0 0 4px; }
+  h2 { font-size: 14px; margin: 0 0 10px; }
+  .sub { color: var(--muted); font-size: 12px; margin-bottom: 14px; }
+  .panel { background: var(--panel); border: 1px solid var(--border);
+           border-radius: 10px; padding: 12px; margin-bottom: 14px; }
+  .grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+  @media (max-width: 900px) { .grid2 { grid-template-columns: 1fr; } }
+  label { display: block; color: var(--muted); font-size: 11px; margin-bottom: 3px; }
+  input, select { width: 100%; padding: 6px 8px; border-radius: 6px; border: 1px solid var(--border);
+                  background: var(--panel-2); color: var(--text); font-family: inherit; font-size: 12px; }
+  input:focus, select:focus { outline: 1px solid var(--accent); }
+  input.ltr { direction: ltr; text-align: left; font-family: Consolas, monospace; }
+  button { padding: 6px 12px; border-radius: 6px; border: 1px solid var(--border); background: var(--panel-2);
+           color: var(--text); cursor: pointer; font-family: inherit; font-size: 12px; white-space: nowrap; }
+  button:hover:not(:disabled) { border-color: var(--accent); color: #fff; }
+  button:disabled { opacity: .45; cursor: not-allowed; }
+  button.primary { background: var(--accent); border-color: var(--accent); color: #06101c; font-weight: bold; }
+  button.danger { border-color: #5a2b2b; }
+  .row { display: flex; gap: 8px; align-items: flex-end; flex-wrap: wrap; margin-bottom: 8px; }
+  .row > div { flex: 1; min-width: 90px; }
+  .fields { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; margin-bottom: 10px; }
+  .log { direction: ltr; text-align: left; background: #0b0f14; border: 1px solid var(--border);
+         border-radius: 8px; height: 300px; overflow-y: auto; padding: 8px;
+         font-family: "Cascadia Mono", Consolas, monospace; font-size: 11px; line-height: 1.5; }
+  .log .e { margin-bottom: 6px; border-left: 2px solid var(--border); padding-left: 6px;
+            white-space: pre-wrap; word-break: break-word; }
+  .log .e.in { border-left-color: var(--ok); }
+  .log .e.out { border-left-color: var(--sent); }
+  .log .e.err { border-left-color: var(--err); color: #ffb3b3; }
+  .log .e.sys { border-left-color: var(--muted); color: var(--muted); }
+  .log .t { color: var(--muted); }
+  .dot { display: inline-block; width: 8px; height: 8px; border-radius: 50%; background: #555;
+         margin-left: 6px; vertical-align: middle; }
+  .dot.on { background: var(--ok); } .dot.off { background: var(--err); }
+  table { width: 100%; border-collapse: collapse; font-size: 12px; }
+  th, td { text-align: right; padding: 6px 8px; border-bottom: 1px solid var(--border); vertical-align: top; }
+  th { color: var(--muted); font-weight: normal; font-size: 11px; }
+  td.detail { direction: ltr; text-align: left; font-family: Consolas, monospace;
+              font-size: 11px; color: var(--muted); white-space: pre-wrap; }
+  .badge { padding: 2px 8px; border-radius: 20px; font-size: 11px; white-space: nowrap; }
+  .badge.pass { background: rgba(70,201,139,.15); color: var(--ok); }
+  .badge.fail { background: rgba(255,107,107,.15); color: var(--err); }
+  .badge.run  { background: rgba(77,163,255,.15); color: var(--accent); }
+  .badge.skip { background: rgba(134,149,168,.15); color: var(--muted); }
+  .meta { color: var(--muted); font-size: 11px; direction: ltr; text-align: left;
+          font-family: Consolas, monospace; white-space: pre-wrap; }
+  .hint { border-radius: 8px; padding: 8px 10px; margin-top: 10px; font-size: 12px; }
+  .hint.warn { background: rgba(255,180,84,.1); border: 1px solid rgba(255,180,84,.35); color: var(--warn); }
+  .hint.bad  { background: rgba(255,107,107,.1); border: 1px solid rgba(255,107,107,.35); color: var(--err); }
+  .split { display: flex; justify-content: space-between; align-items: center; gap: 10px; }
+  .disabled-area { opacity: .4; pointer-events: none; }
+</style>
+</head>
+<body>
+
+<h1>تستر چت سرور هکم</h1>
+<div class="sub">
+  ابزار مستقل — به سرور چت دست نمی‌زند. آدرس سرور را وارد کنید تا دو کلاینت سوکت به آن وصل شوند.
+</div>
+
+<div class="panel">
+  <h2>اتصال به سرور چت</h2>
+  <div class="row">
+    <div style="flex:2">
+      <label>آدرس سرور چت (IP و پورت)</label>
+      <input id="serverUrl" class="ltr" placeholder="http://1.2.3.4:3008">
+    </div>
+    <div style="flex:2">
+      <label>کلید AES — دقیقاً ۳۲ کاراکتر (AES_ENCRYPTION_SECRET_KEY)</label>
+      <input id="aesKey" class="ltr">
+    </div>
+    <div style="flex:1">
+      <label>نام اتاق عمومی</label>
+      <input id="publicRoom" class="ltr" value="public_chat_room">
+    </div>
+    <button id="btnConnect" class="primary">اتصال</button>
+  </div>
+  <div id="serverInfo" class="meta">وصل نشده.</div>
+  <div id="serverHint"></div>
+</div>
+
+<div id="workArea" class="disabled-area">
+  <div class="grid2">
+    <div class="panel" id="panel-A"></div>
+    <div class="panel" id="panel-B"></div>
+  </div>
+
+  <div class="panel">
+    <div class="split" style="margin-bottom:10px">
+      <h2 style="margin:0">تست‌های خودکار</h2>
+      <div style="display:flex; gap:8px">
+        <button id="runAll" class="primary">اجرای همه تست‌ها</button>
+        <button id="btnReset">پاک کردن نتایج</button>
+      </div>
+    </div>
+    <div class="sub" style="margin:0 0 8px">
+      سرور روی هر <code>user_id</code> کول‌داون ۸ ثانیه‌ای دارد، پس قبل از هر ارسال یک شناسه تصادفی برای کلاینت A ساخته می‌شود.
+    </div>
+    <table id="results">
+      <thead><tr><th style="width:30px">#</th><th style="width:34%">تست</th><th style="width:90px">نتیجه</th><th>جزئیات</th></tr></thead>
+      <tbody></tbody>
+    </table>
+  </div>
+</div>
+
+<script>
+// ===================== تنظیمات و ذخیره‌سازی =====================
+const DEFAULTS = {
+  serverUrl: 'http://127.0.0.1:3008',
+  aesKey: 'p2s5v8y/B?E(H+MbPeShVmYq3t6w9z$C',
+  publicRoom: 'public_chat_room'
+};
+const CFG = { serverUrl: '', aesKey: '', publicRoom: '' };
+const COOLDOWN_SECONDS = 8;
+
+function loadSettings() {
+  let saved = {};
+  try { saved = JSON.parse(localStorage.getItem('hokm-tester') || '{}'); } catch (e) {}
+  document.getElementById('serverUrl').value  = saved.serverUrl  || DEFAULTS.serverUrl;
+  document.getElementById('aesKey').value     = saved.aesKey     || DEFAULTS.aesKey;
+  document.getElementById('publicRoom').value = saved.publicRoom || DEFAULTS.publicRoom;
+}
+function saveSettings() {
+  try { localStorage.setItem('hokm-tester', JSON.stringify(CFG)); } catch (e) {}
+}
+
+// ===================== کمک‌کارها =====================
+async function api(path, body) {
+  const res = await fetch(path, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(Object.assign({ key: CFG.aesKey }, body))
+  });
+  const json = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(json.error || ('HTTP ' + res.status));
+  return json;
+}
+const encryptPayload = async (payload) => (await api('/api/encrypt', { payload })).data;
+const decryptPayload = async (data) => (await api('/api/decrypt', { data })).payload;
+
+function randFrom(chars, n) {
+  let s = '';
+  for (let i = 0; i < n; i++) s += chars[Math.floor(Math.random() * chars.length)];
+  return s;
+}
+const rand = (n = 6) => randFrom('abcdefghijklmnopqrstuvwxyz0123456789', n);
+const randAlpha = (n = 4) => randFrom('abcdefghijklmnopqrstuvwxyz', n);
+const sleep = (ms) => new Promise(r => setTimeout(r, ms));
+
+function escapeHtml(s) {
+  return String(s).replace(/[&<>]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;' }[c]));
+}
+
+function summarize(p) {
+  if (!p || !p.type) return String(p);
+  switch (p.type) {
+    case 'get_privious_public_chats':  return `تاریخچه عمومی (${(p.public_chats || []).length} پیام)`;
+    case 'get_privious_private_chats': return `تاریخچه خصوصی (${(p.private_chats || []).length} پیام)`;
+    case 'get_other_user_chat':        return `پیام جدید در «${p.room_name}»: ${p.chat_message_object && p.chat_message_object.message}`;
+    case 'request_user_details':       return 'سرور درخواست user_details کرد';
+    case 'error':                      return 'خطا: ' + p.message;
+    default:                           return p.type;
+  }
+}
+
+// کتابخانه کلاینت را از خودِ سرور چت می‌گیریم تا نسخه‌اش دقیقاً بخواند
+function loadSocketIoClient(baseUrl) {
+  return new Promise((resolve, reject) => {
+    if (window.io) return resolve();
+    const s = document.createElement('script');
+    s.src = baseUrl.replace(/\/$/, '') + '/socket.io/socket.io.js';
+    s.onload = () => window.io ? resolve() : reject(new Error('اسکریپت لود شد ولی io تعریف نشد'));
+    s.onerror = () => reject(new Error('کتابخانه socket.io از سرور لود نشد — آدرس یا پورت اشتباه است، یا سرور بالا نیست'));
+    document.head.appendChild(s);
+  });
+}
+
+// ===================== کلاینت تست =====================
+class TestClient {
+  constructor(id) {
+    this.id = id;
+    this.socket = null;
+    this.waiters = new Set();
+    this.chain = Promise.resolve();
+    this.render();
+  }
+
+  render() {
+    document.getElementById('panel-' + this.id).innerHTML = `
+      <div class="split" style="margin-bottom:10px">
+        <h2 style="margin:0">کلاینت ${this.id} <span class="dot off" id="dot-${this.id}"></span>
+          <span class="meta" id="status-${this.id}" style="display:inline">disconnected</span></h2>
+        <div style="display:flex; gap:6px">
+          <button id="btn-conn-${this.id}">اتصال</button>
+          <button id="btn-disc-${this.id}" class="danger" disabled>قطع</button>
+        </div>
+      </div>
+
+      <div class="fields">
+        <div><label>user_id</label><input id="uid-${this.id}" class="ltr" value="${this.id.toLowerCase()}_${rand(4)}"></div>
+        <div><label>user_name</label><input id="uname-${this.id}" class="ltr" value="player_${this.id}"></div>
+        <div><label>user_uniquename</label><input id="uuniq-${this.id}" class="ltr" value="uniq_${this.id.toLowerCase()}"></div>
+        <div><label>user_avatar_id</label><input id="uavatar-${this.id}" type="number" value="3"></div>
+        <div><label>user_level</label><input id="ulevel-${this.id}" type="number" value="12"></div>
+        <div style="display:flex; align-items:flex-end">
+          <button style="width:100%" id="btn-auth-${this.id}" disabled>get_user_details</button>
+        </div>
+      </div>
+
+      <div class="row">
+        <div style="flex:2"><label>room_name (اتاق خصوصی)</label>
+          <input id="roomInput-${this.id}" class="ltr" placeholder="مثلاً 20000001"></div>
+        <button id="btn-join-${this.id}" disabled>join_chat_room</button>
+      </div>
+
+      <div class="row">
+        <div style="flex:3"><label>پیام</label><input id="msg-${this.id}" value="سلام ${this.id}"></div>
+        <div style="flex:1"><label>ارسال به</label>
+          <select id="target-${this.id}">
+            <option value="__public__">اتاق عمومی</option>
+            <option value="__room__">اتاق بالا</option>
+          </select></div>
+        <button id="btn-send-${this.id}" disabled>send_chat_message</button>
+      </div>
+
+      <div class="row" style="margin-bottom:6px; align-items:center">
+        <button id="btn-clear-${this.id}">پاک کردن لاگ</button>
+        <label style="display:flex; align-items:center; gap:5px; color:var(--muted); white-space:nowrap; margin:0">
+          <input type="checkbox" id="raw-${this.id}" style="width:auto"> نمایش payload رمزشده
+        </label>
+        <span style="flex:1"></span>
+      </div>
+      <div class="log" id="log-${this.id}"></div>
+    `;
+
+    const $ = (p) => document.getElementById(p + '-' + this.id);
+    const guard = (fn) => () => { Promise.resolve().then(fn).catch(err => this.log('err', err.message)); };
+    $('btn-conn').onclick = guard(() => this.connect());
+    $('btn-disc').onclick = () => this.disconnect();
+    $('btn-auth').onclick = guard(() => this.sendUserDetails());
+    $('btn-join').onclick = guard(() => this.joinRoom($('roomInput').value.trim()));
+    $('btn-send').onclick = guard(() => {
+      const room = $('target').value === '__public__' ? CFG.publicRoom : $('roomInput').value.trim();
+      return this.sendMessage(room, $('msg').value);
+    });
+    $('btn-clear').onclick = () => { $('log').innerHTML = ''; };
+  }
+
+  log(kind, title, body) {
+    const el = document.getElementById('log-' + this.id);
+    const div = document.createElement('div');
+    div.className = 'e ' + kind;
+    div.innerHTML = `<span class="t">[${new Date().toLocaleTimeString('en-GB')}]</span> ${escapeHtml(title)}` +
+      (body !== undefined ? '\n' + escapeHtml(typeof body === 'string' ? body : JSON.stringify(body, null, 2)) : '');
+    el.appendChild(div);
+    el.scrollTop = el.scrollHeight;
+  }
+
+  setConnected(on, statusText) {
+    document.getElementById('dot-' + this.id).className = 'dot ' + (on ? 'on' : 'off');
+    document.getElementById('status-' + this.id).textContent = statusText;
+    ['btn-auth', 'btn-join', 'btn-send'].forEach(p => document.getElementById(p + '-' + this.id).disabled = !on);
+    document.getElementById('btn-conn-' + this.id).disabled = on;
+    document.getElementById('btn-disc-' + this.id).disabled = !on;
+  }
+
+  connect() {
+    if (this.socket) this.socket.disconnect();
+    this.log('sys', 'در حال اتصال به ' + CFG.serverUrl + ' …');
+    this.socket = io(CFG.serverUrl, { forceNew: true, transports: ['websocket', 'polling'] });
+
+    this.socket.on('disconnect', (reason) => {
+      this.setConnected(false, 'disconnected');
+      this.log('sys', 'قطع شد: ' + reason);
+    });
+    this.socket.on('connect_error', (err) => {
+      this.log('err', 'connect_error: ' + (err && err.message ? err.message : err));
+    });
+    this.socket.on('get_data', (raw) => this.handleGetData(raw));
+
+    return new Promise((resolve, reject) => {
+      const t = setTimeout(() => reject(new Error(`کلاینت ${this.id}: اتصال تایم‌اوت شد`)), 10000);
+      this.socket.on('connect', () => {
+        clearTimeout(t);
+        this.setConnected(true, 'connected (' + this.socket.id + ')');
+        this.log('sys', 'متصل شد → socket id = ' + this.socket.id);
+        resolve();
+      });
+    });
+  }
+
+  disconnect() {
+    if (this.socket) { this.socket.disconnect(); this.socket = null; }
+    this.setConnected(false, 'disconnected');
+  }
+
+  handleGetData(raw) {
+    // رمزگشایی async است؛ زنجیره می‌کنیم تا ترتیب لاگ به‌هم نریزد
+    this.chain = this.chain.then(async () => {
+      if (document.getElementById('raw-' + this.id).checked) this.log('sys', 'raw get_data', raw && raw.data);
+      if (!raw || typeof raw.data !== 'string') return this.log('err', 'get_data بدون فیلد data', raw);
+
+      let payload;
+      try { payload = await decryptPayload(raw.data); }
+      catch (err) { return this.log('err', 'رمزگشایی ناموفق: ' + err.message, raw.data); }
+
+      this.log(payload && payload.type === 'error' ? 'err' : 'in', '← get_data : ' + summarize(payload), payload);
+      this.waiters.forEach(w => w(payload));
+    }).catch(err => this.log('err', 'خطای داخلی: ' + err.message));
+  }
+
+  waitFor(predicate, label, timeout = 9000) {
+    return new Promise((resolve, reject) => {
+      const waiter = (payload) => {
+        let matched = false;
+        try { matched = predicate(payload); } catch (e) { matched = false; }
+        if (matched) { cleanup(); resolve(payload); }
+      };
+      const timer = setTimeout(() => {
+        cleanup();
+        reject(new Error(`کلاینت ${this.id}: تایم‌اوت در انتظار «${label}»`));
+      }, timeout);
+      const cleanup = () => { clearTimeout(timer); this.waiters.delete(waiter); };
+      this.waiters.add(waiter);
+    });
+  }
+
+  readDetails() {
+    const $ = (p) => document.getElementById(p + '-' + this.id).value;
+    return {
+      user_id: $('uid'),
+      user_name: $('uname'),
+      user_uniquename: $('uuniq'),
+      user_avatar_id: Number($('uavatar')) || 0,
+      user_level: Number($('ulevel')) || 0
+    };
+  }
+
+  rotateUserId() {
+    const el = document.getElementById('uid-' + this.id);
+    el.value = this.id.toLowerCase() + '_' + rand(6);
+    return el.value;
+  }
+
+  async emitEncrypted(event, payload) {
+    if (!this.socket || !this.socket.connected) throw new Error(`کلاینت ${this.id} متصل نیست`);
+    const data = await encryptPayload(payload);
+    this.log('out', '→ ' + event, payload);
+    this.socket.emit(event, data);
+  }
+
+  async sendUserDetails() {
+    const promise = this.waitFor(p => p && p.type === 'get_privious_public_chats', 'get_privious_public_chats');
+    await this.emitEncrypted('get_user_details', this.readDetails());
+    return promise;
+  }
+
+  async joinRoom(roomName) {
+    if (!roomName) throw new Error('نام اتاق خالی است');
+    const promise = this.waitFor(p => p && p.type === 'get_privious_private_chats', 'get_privious_private_chats');
+    await this.emitEncrypted('join_chat_room', { room_name: roomName });
+    return promise;
+  }
+
+  async sendMessage(roomName, message) {
+    if (!roomName) throw new Error('نام اتاق خالی است');
+    // سرور با socket.to(room) پخش می‌کند، پس فرستنده پیام خودش را دریافت نمی‌کند
+    await this.emitEncrypted('send_chat_message', { room_name: roomName, message });
+  }
+}
+
+// کلاینت موقت و بدون UI، برای تست‌هایی که به یک اتصال تازه نیاز دارند
+class TempClient {
+  constructor() { this.id = 'TEMP'; this.waiters = new Set(); this.chain = Promise.resolve(); }
+  connect() {
+    this.socket = io(CFG.serverUrl, { forceNew: true, transports: ['websocket', 'polling'] });
+    this.socket.on('get_data', (raw) => {
+      this.chain = this.chain.then(async () => {
+        if (!raw || typeof raw.data !== 'string') return;
+        const payload = await decryptPayload(raw.data).catch(() => null);
+        if (payload) this.waiters.forEach(w => w(payload));
+      });
+    });
+    return new Promise((resolve, reject) => {
+      const t = setTimeout(() => reject(new Error('اتصال موقت تایم‌اوت شد')), 10000);
+      this.socket.on('connect', () => { clearTimeout(t); resolve(); });
+      this.socket.on('connect_error', (e) => { clearTimeout(t); reject(new Error('connect_error: ' + e.message)); });
+    });
+  }
+  waitFor(p, l, t = 9000) { return TestClient.prototype.waitFor.call(this, p, l, t); }
+  async emit(event, payload) { this.socket.emit(event, await encryptPayload(payload)); }
+  close() { if (this.socket) this.socket.disconnect(); }
+}
+
+// ===================== سناریوهای تست =====================
+const state = {};
+let A = null, B = null;
+
+function isMsg(token, room) {
+  return (p) => p && p.type === 'get_other_user_chat' &&
+    (!room || p.room_name === room) &&
+    p.chat_message_object && String(p.chat_message_object.message).includes(token);
+}
+
+async function ensureConnected(client) {
+  if (!client.socket || !client.socket.connected) await client.connect();
+}
+
+// شناسه A را قبل از هر ارسال عوض می‌کنیم تا در کول‌داون ۸ ثانیه‌ای گیر نکند
+async function freshAuthA() {
+  A.rotateUserId();
+  await A.sendUserDetails();
+}
+
+const SCENARIOS = [
+  {
+    title: 'اتصال هر دو کلاینت + get_user_details',
+    async run() {
+      await ensureConnected(A);
+      await ensureConnected(B);
+      const [ra, rb] = await Promise.all([A.sendUserDetails(), B.sendUserDetails()]);
+      return `A: ${ra.public_chats.length} پیام تاریخچه، B: ${rb.public_chats.length} پیام — is_emoji_active=${ra.is_emoji_active}`;
+    },
+    hint: 'اگر تایم‌اوت شد: نام اتاق عمومی یا کلید AES اشتباه است.'
+  },
+  {
+    title: 'چت عمومی: A می‌فرستد، B دریافت می‌کند',
+    async run() {
+      await freshAuthA();
+      const token = 'pub' + rand(6);
+      state.publicToken = token;
+      const wait = B.waitFor(isMsg(token, CFG.publicRoom), 'پیام عمومی روی B');
+      await A.sendMessage(CFG.publicRoom, 'testpublic ' + token);
+      const s = (await wait).chat_message_object.sender_details;
+      return `دریافت شد — sender=${s.user_name}/${s.user_id} level=${s.user_level} avatar=${s.user_avatar_id}`;
+    },
+    hint: 'شایع‌ترین علت‌ها: Redis روی سرور بالا نیست (ضدفلود قبل از ارسال به Redis نیاز دارد و خطا را بی‌صدا می‌بلعد)، یا سرور در حالت cluster بدون SHOULD_USE_NGINX_REDIS اجرا شده و دو کلاینت روی دو worker افتاده‌اند.'
+  },
+  {
+    title: 'ذخیره در MySQL: پیام عمومی در تاریخچه می‌آید',
+    async run() {
+      if (!state.publicToken) throw new Error('تست چت عمومی اجرا نشده است');
+      await sleep(400);
+      const res = await B.sendUserDetails();
+      if (!(res.public_chats || []).some(c => String(c.message).includes(state.publicToken))) {
+        throw new Error(`در ${res.public_chats.length} پیام آخر جدول public_chat پیدا نشد`);
+      }
+      const last = res.public_chats[res.public_chats.length - 1];
+      return `پیدا شد — message_time آخرین پیام: ${last.message_time} (${new Date(last.message_time).toLocaleString('en-GB')})`;
+    },
+    hint: 'یعنی INSERT یا SELECT روی جدول public_chat مشکل دارد — نام ستون‌ها و دسترسی کاربر MySQL را چک کنید.'
+  },
+  {
+    title: 'اتاق خصوصی: join_chat_room و پخش پیام',
+    async run() {
+      const room = String(20000000 + Math.floor(Math.random() * 9000000));
+      state.privateRoom = room;
+      await B.joinRoom(room);
+      await A.joinRoom(room);
+      await freshAuthA();
+      const token = 'prv' + rand(6);
+      state.privateToken = token;
+      const wait = B.waitFor(isMsg(token, room), 'پیام خصوصی روی B');
+      await A.sendMessage(room, 'testprivate ' + token);
+      await wait;
+      return `اتاق ${room} — پیام خصوصی به کلاینت دوم رسید`;
+    }
+  },
+  {
+    title: 'تاریخچه اتاق خصوصی از MySQL',
+    async run() {
+      if (!state.privateRoom) throw new Error('تست اتاق خصوصی اجرا نشده است');
+      await sleep(400);
+      const res = await B.joinRoom(state.privateRoom);
+      if (!(res.private_chats || []).some(c => String(c.message).includes(state.privateToken))) {
+        throw new Error(`در ${res.private_chats.length} پیام تاریخچه اتاق پیدا نشد`);
+      }
+      return `${res.private_chats.length} پیام در تاریخچه اتاق ${state.privateRoom}`;
+    },
+    hint: 'توجه: اگر نام اتاق عددی و کمتر از 10000000 باشد، سرور عمداً آن را ذخیره نمی‌کند.'
+  },
+  {
+    title: 'ضدفلود: پیام دوم باید با خطای کول‌داون رد شود',
+    async run() {
+      await freshAuthA();
+      const t1 = 'flooda' + rand(4), t2 = 'floodb' + rand(4);
+      const first = B.waitFor(isMsg(t1), 'پیام اول روی B');
+      const errWait = A.waitFor(p => p && p.type === 'error', 'خطای کول‌داون روی A');
+      await A.sendMessage(CFG.publicRoom, t1);
+      await first;
+      await A.sendMessage(CFG.publicRoom, t2);
+      return 'پیام دوم رد شد → "' + (await errWait).message + '"';
+    },
+    hint: 'اگر خطا نیامد یعنی Redis کول‌داون را ثبت نمی‌کند و ضدفلود عملاً غیرفعال است.'
+  },
+  {
+    title: 'فیلتر: حذف شماره موبایل و کاراکترهای خاص',
+    async run() {
+      await freshAuthA();
+      const a = 'aa' + randAlpha(4), b = 'bb' + randAlpha(4);
+      const raw = `${a}09121234567${b}!@#$%`;
+      const expected = a + b;
+      const wait = B.waitFor(p => p && p.type === 'get_other_user_chat' &&
+        p.chat_message_object && String(p.chat_message_object.message).includes(a), 'پیام فیلترشده روی B');
+      await A.sendMessage(CFG.publicRoom, raw);
+      const received = (await wait).chat_message_object.message;
+      if (received !== expected) throw new Error(`انتظار «${expected}» بود ولی «${received}» رسید`);
+      return `«${raw}» → «${received}»`;
+    }
+  },
+  {
+    title: 'ارسال بدون احراز هویت → request_user_details',
+    async run() {
+      const temp = new TempClient();
+      try {
+        await temp.connect();
+        const wait = temp.waitFor(p => p && p.type === 'request_user_details', 'request_user_details');
+        await temp.emit('send_chat_message', { room_name: CFG.publicRoom, message: 'no auth ' + rand(4) });
+        await wait;
+        return 'سرور همان‌طور که انتظار می‌رفت user_details درخواست کرد';
+      } finally { temp.close(); }
+    }
+  },
+  {
+    title: 'ورودی خراب (payload رمزنشده) نباید سرور را بیندازد',
+    async run() {
+      const temp = new TempClient();
+      try {
+        await temp.connect();
+        temp.socket.emit('get_user_details', 'not-encrypted-at-all');
+        temp.socket.emit('join_chat_room', 'garbage:data');
+        temp.socket.emit('send_chat_message', '###');
+        await sleep(1500);
+        if (!temp.socket.connected) throw new Error('سوکت پس از ورودی خراب قطع شد');
+        // اثبات نهایی: یک اتصال کاملاً تازه هنوز جواب می‌گیرد
+        const probe = new TempClient();
+        try {
+          await probe.connect();
+          const wait = probe.waitFor(p => p && p.type === 'request_user_details', 'پاسخ سرور بعد از ورودی خراب');
+          await probe.emit('send_chat_message', { room_name: CFG.publicRoom, message: 'probe' });
+          await wait;
+        } finally { probe.close(); }
+        return 'سرور سالم ماند و به اتصال جدید پاسخ داد';
+      } finally { temp.close(); }
+    }
+  }
+];
+
+function resetResults() {
+  document.querySelector('#results tbody').innerHTML = SCENARIOS.map((s, i) => `
+    <tr>
+      <td>${i + 1}</td>
+      <td>${s.title}</td>
+      <td><span class="badge skip" id="res-${i}">اجرا نشده</span></td>
+      <td class="detail" id="det-${i}">—</td>
+    </tr>`).join('');
+}
+
+async function runAllScenarios() {
+  const btn = document.getElementById('runAll');
+  btn.disabled = true;
+  resetResults();
+  for (let i = 0; i < SCENARIOS.length; i++) {
+    const badge = document.getElementById('res-' + i);
+    const detail = document.getElementById('det-' + i);
+    badge.className = 'badge run'; badge.textContent = 'در حال اجرا'; detail.textContent = '…';
+    try {
+      const info = await SCENARIOS[i].run();
+      badge.className = 'badge pass'; badge.textContent = 'موفق';
+      detail.textContent = info || 'ok';
+    } catch (err) {
+      badge.className = 'badge fail'; badge.textContent = 'ناموفق';
+      detail.textContent = err.message + (SCENARIOS[i].hint ? '\n↳ ' + SCENARIOS[i].hint : '');
+    }
+  }
+  btn.disabled = false;
+}
+
+// ===================== راه‌اندازی =====================
+async function connectToServer() {
+  const btn = document.getElementById('btnConnect');
+  const info = document.getElementById('serverInfo');
+  const hint = document.getElementById('serverHint');
+  btn.disabled = true;
+  hint.innerHTML = '';
+
+  CFG.serverUrl  = document.getElementById('serverUrl').value.trim().replace(/\/$/, '');
+  CFG.aesKey     = document.getElementById('aesKey').value;
+  CFG.publicRoom = document.getElementById('publicRoom').value.trim() || DEFAULTS.publicRoom;
+
+  try {
+    if (!/^https?:\/\//.test(CFG.serverUrl)) throw new Error('آدرس باید با http:// شروع شود');
+    if (CFG.aesKey.length !== 32) throw new Error(`کلید AES باید دقیقاً ۳۲ کاراکتر باشد (الان ${CFG.aesKey.length} است)`);
+
+    info.textContent = 'در حال بررسی سرور…';
+
+    // تست سریع رمزنگاری با همین کلید
+    const probe = await decryptPayload(await encryptPayload({ ping: 1 }));
+    if (!probe || probe.ping !== 1) throw new Error('تست رمزنگاری محلی شکست خورد');
+
+    await loadSocketIoClient(CFG.serverUrl);
+
+    let health = null;
+    try { health = await fetch(CFG.serverUrl + '/').then(r => r.json()); } catch (e) { /* CORS یا مسیر ندارد */ }
+
+    info.textContent =
+      `server = ${CFG.serverUrl}\n` +
+      `public_room = ${CFG.publicRoom}   cooldown = ${COOLDOWN_SECONDS}s\n` +
+      (health ? `health: status=${health.status} pid=${health.pid} port=${health.port}` : 'health: در دسترس نبود (مهم نیست)');
+
+    saveSettings();
+
+    if (!A) { A = new TestClient('A'); B = new TestClient('B'); resetResults(); }
+    document.getElementById('workArea').classList.remove('disabled-area');
+
+    await Promise.all([A.connect(), B.connect()]);
+    hint.innerHTML = '<div class="hint warn">هر دو کلاینت وصل شدند. برای شروع «اجرای همه تست‌ها» را بزنید.</div>';
+  } catch (err) {
+    info.textContent = 'اتصال ناموفق.';
+    hint.innerHTML = '<div class="hint bad">' + escapeHtml(err.message) + '</div>';
+  } finally {
+    btn.disabled = false;
+  }
+}
+
+document.getElementById('btnConnect').onclick = connectToServer;
+document.getElementById('runAll').onclick = runAllScenarios;
+document.getElementById('btnReset').onclick = resetResults;
+loadSettings();
+</script>
+</body>
+</html>

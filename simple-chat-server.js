@@ -28,12 +28,6 @@ app.get("/", (req, res) => {
   });
 });
 
-// ===================== Test page (opt-in) =====================
-// فقط با ENABLE_TEST_PAGE=true فعال می‌شود؛ روی پروداکشن با TEST_PAGE_TOKEN محافظتش کنید.
-if (process.env.ENABLE_TEST_PAGE === "true") {
-  require("./controllers/test-page-controller").Register(app);
-}
-
 // ===================== GLOBAL GUARD (per worker only) =====================
 if (global.__APP_STARTED__) {
   console.log(`[Worker ${process.pid}] already initialized`);
