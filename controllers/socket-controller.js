@@ -139,6 +139,10 @@ function DecryptData(text) {
   }
 }
 
+// در اختیار گذاشتن همین توابع برای صفحه تست، تا دقیقاً همان منطق رمزنگاری کلاینت واقعی تست شود
+exports.EncryptData = EncryptData;
+exports.DecryptData = DecryptData;
+
 // ===================== UGC FILTER =====================
 async function isMessageClean(chatMessage) {
   if (!chatMessage || chatMessage.trim() === '') return true;
