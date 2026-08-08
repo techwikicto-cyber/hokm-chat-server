@@ -25,6 +25,18 @@ const PORT = Number(process.env.PORT || 8080);
 const IV_LENGTH = 16;
 
 const INDEX_PATH = path.join(__dirname, 'index.html');
+const SCENARIOS_PATH = path.join(__dirname, 'lib', 'scenarios.js');
+
+function SendFile(res, filePath, contentType) {
+  fs.readFile(filePath, (err, data) => {
+    if (err) {
+      res.writeHead(500, { 'Content-Type': 'text/plain; charset=utf-8' });
+      return res.end(path.basename(filePath) + ' پیدا نشد: ' + err.message);
+    }
+    res.writeHead(200, { 'Content-Type': contentType, 'Cache-Control': 'no-store' });
+    res.end(data);
+  });
+}
 
 function EncryptData(text, key) {
   const iv = crypto.randomBytes(IV_LENGTH);
@@ -82,15 +94,12 @@ const server = http.createServer(async (req, res) => {
   const url = req.url.split('?')[0];
 
   if (req.method === 'GET' && (url === '/' || url === '/index.html')) {
-    fs.readFile(INDEX_PATH, (err, data) => {
-      if (err) {
-        res.writeHead(500, { 'Content-Type': 'text/plain; charset=utf-8' });
-        return res.end('index.html پیدا نشد: ' + err.message);
-      }
-      res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8', 'Cache-Control': 'no-store' });
-      res.end(data);
-    });
-    return;
+    return SendFile(res, INDEX_PATH, 'text/html; charset=utf-8');
+  }
+
+  // سناریوها بین CLI و مرورگر مشترک‌اند تا از هم جدا نیفتند
+  if (req.method === 'GET' && url === '/lib/scenarios.js') {
+    return SendFile(res, SCENARIOS_PATH, 'application/javascript; charset=utf-8');
   }
 
   if (req.method === 'POST' && (url === '/api/encrypt' || url === '/api/decrypt')) {

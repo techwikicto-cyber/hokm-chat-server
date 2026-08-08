@@ -1,0 +1,21 @@
+{
+  "name": "hokm-chat-tester",
+  "version": "1.0.0",
+  "private": true,
+  "description": "تستر مستقل چت سرور هکم — عیب‌یابی شبکه و تست فانکشنالیتی، بدون هیچ تغییری در سرور",
+  "bin": {
+    "hokm-chat-test": "./cli.js"
+  },
+  "scripts": {
+    "test": "node cli.js",
+    "diagnose": "node cli.js --diagnose",
+    "ui": "node server.js"
+  },
+  "dependencies": {
+    "socket.io-client-v2": "npm:socket.io-client@^2.5.0",
+    "socket.io-client-v4": "npm:socket.io-client@^4.7.0"
+  },
+  "engines": {
+    "node": ">=16"
+  }
+}

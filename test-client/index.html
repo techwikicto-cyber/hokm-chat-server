@@ -118,6 +118,7 @@
   </div>
 </div>
 
+<script src="/lib/scenarios.js"></script>
 <script>
 // ===================== تنظیمات و ذخیره‌سازی =====================
 const DEFAULTS = {
@@ -357,30 +358,40 @@ class TestClient {
     return el.value;
   }
 
-  async emitEncrypted(event, payload) {
-    if (!this.socket || !this.socket.connected) throw new Error(`کلاینت ${this.id} متصل نیست`);
+  isConnected() { return !!(this.socket && this.socket.connected); }
+  close() { this.disconnect(); }
+
+  async sendRaw(event, payload) {
+    if (!this.isConnected()) throw new Error(`کلاینت ${this.id} متصل نیست`);
     const data = await encryptPayload(payload);
     this.log('out', '→ ' + event, payload);
     this.socket.emit(event, data);
   }
 
+  // ارسال خام و رمزنشده — فقط برای تست مقاومت سرور به ورودی خراب
+  emitRaw(event, rawString) {
+    if (!this.isConnected()) throw new Error(`کلاینت ${this.id} متصل نیست`);
+    this.log('out', '→ ' + event + ' (خام و رمزنشده)', rawString);
+    this.socket.emit(event, rawString);
+  }
+
   async sendUserDetails() {
     const promise = this.waitFor(p => p && p.type === 'get_privious_public_chats', 'get_privious_public_chats');
-    await this.emitEncrypted('get_user_details', this.readDetails());
+    await this.sendRaw('get_user_details', this.readDetails());
     return promise;
   }
 
   async joinRoom(roomName) {
     if (!roomName) throw new Error('نام اتاق خالی است');
     const promise = this.waitFor(p => p && p.type === 'get_privious_private_chats', 'get_privious_private_chats');
-    await this.emitEncrypted('join_chat_room', { room_name: roomName });
+    await this.sendRaw('join_chat_room', { room_name: roomName });
     return promise;
   }
 
   async sendMessage(roomName, message) {
     if (!roomName) throw new Error('نام اتاق خالی است');
     // سرور با socket.to(room) پخش می‌کند، پس فرستنده پیام خودش را دریافت نمی‌کند
-    await this.emitEncrypted('send_chat_message', { room_name: roomName, message });
+    await this.sendRaw('send_chat_message', { room_name: roomName, message });
   }
 }
 
@@ -403,163 +414,23 @@ class TempClient {
     });
   }
   waitFor(p, l, t = 9000) { return TestClient.prototype.waitFor.call(this, p, l, t); }
-  async emit(event, payload) { this.socket.emit(event, await encryptPayload(payload)); }
+  isConnected() { return !!(this.socket && this.socket.connected); }
+  async sendRaw(event, payload) { this.socket.emit(event, await encryptPayload(payload)); }
+  emitRaw(event, rawString) { this.socket.emit(event, rawString); }
   close() { if (this.socket) this.socket.disconnect(); }
 }
 
-// ===================== سناریوهای تست =====================
-const state = {};
+// ===================== سناریوها =====================
+// از /lib/scenarios.js می‌آیند — دقیقاً همان فایلی که CLI استفاده می‌کند،
+// تا نسخه مرورگر و نسخه خط فرمان هرگز از هم جدا نیفتند.
+const SCENARIOS = HokmScenarios.SCENARIOS;
 let A = null, B = null;
 
-function isMsg(token, room) {
-  return (p) => p && p.type === 'get_other_user_chat' &&
-    (!room || p.room_name === room) &&
-    p.chat_message_object && String(p.chat_message_object.message).includes(token);
+async function makeTempClient() {
+  const t = new TempClient();
+  await t.connect();
+  return t;
 }
-
-async function ensureConnected(client) {
-  if (!client.socket || !client.socket.connected) await client.connect();
-}
-
-// شناسه A را قبل از هر ارسال عوض می‌کنیم تا در کول‌داون ۸ ثانیه‌ای گیر نکند
-async function freshAuthA() {
-  A.rotateUserId();
-  await A.sendUserDetails();
-}
-
-const SCENARIOS = [
-  {
-    title: 'اتصال هر دو کلاینت + get_user_details',
-    async run() {
-      await ensureConnected(A);
-      await ensureConnected(B);
-      const [ra, rb] = await Promise.all([A.sendUserDetails(), B.sendUserDetails()]);
-      return `A: ${ra.public_chats.length} پیام تاریخچه، B: ${rb.public_chats.length} پیام — is_emoji_active=${ra.is_emoji_active}`;
-    },
-    hint: 'اگر تایم‌اوت شد: نام اتاق عمومی یا کلید AES اشتباه است.'
-  },
-  {
-    title: 'چت عمومی: A می‌فرستد، B دریافت می‌کند',
-    async run() {
-      await freshAuthA();
-      const token = 'pub' + rand(6);
-      state.publicToken = token;
-      const wait = B.waitFor(isMsg(token, CFG.publicRoom), 'پیام عمومی روی B');
-      await A.sendMessage(CFG.publicRoom, 'testpublic ' + token);
-      const s = (await wait).chat_message_object.sender_details;
-      return `دریافت شد — sender=${s.user_name}/${s.user_id} level=${s.user_level} avatar=${s.user_avatar_id}`;
-    },
-    hint: 'شایع‌ترین علت‌ها: Redis روی سرور بالا نیست (ضدفلود قبل از ارسال به Redis نیاز دارد و خطا را بی‌صدا می‌بلعد)، یا سرور در حالت cluster بدون SHOULD_USE_NGINX_REDIS اجرا شده و دو کلاینت روی دو worker افتاده‌اند.'
-  },
-  {
-    title: 'ذخیره در MySQL: پیام عمومی در تاریخچه می‌آید',
-    async run() {
-      if (!state.publicToken) throw new Error('تست چت عمومی اجرا نشده است');
-      await sleep(400);
-      const res = await B.sendUserDetails();
-      if (!(res.public_chats || []).some(c => String(c.message).includes(state.publicToken))) {
-        throw new Error(`در ${res.public_chats.length} پیام آخر جدول public_chat پیدا نشد`);
-      }
-      const last = res.public_chats[res.public_chats.length - 1];
-      return `پیدا شد — message_time آخرین پیام: ${last.message_time} (${new Date(last.message_time).toLocaleString('en-GB')})`;
-    },
-    hint: 'یعنی INSERT یا SELECT روی جدول public_chat مشکل دارد — نام ستون‌ها و دسترسی کاربر MySQL را چک کنید.'
-  },
-  {
-    title: 'اتاق خصوصی: join_chat_room و پخش پیام',
-    async run() {
-      const room = String(20000000 + Math.floor(Math.random() * 9000000));
-      state.privateRoom = room;
-      await B.joinRoom(room);
-      await A.joinRoom(room);
-      await freshAuthA();
-      const token = 'prv' + rand(6);
-      state.privateToken = token;
-      const wait = B.waitFor(isMsg(token, room), 'پیام خصوصی روی B');
-      await A.sendMessage(room, 'testprivate ' + token);
-      await wait;
-      return `اتاق ${room} — پیام خصوصی به کلاینت دوم رسید`;
-    }
-  },
-  {
-    title: 'تاریخچه اتاق خصوصی از MySQL',
-    async run() {
-      if (!state.privateRoom) throw new Error('تست اتاق خصوصی اجرا نشده است');
-      await sleep(400);
-      const res = await B.joinRoom(state.privateRoom);
-      if (!(res.private_chats || []).some(c => String(c.message).includes(state.privateToken))) {
-        throw new Error(`در ${res.private_chats.length} پیام تاریخچه اتاق پیدا نشد`);
-      }
-      return `${res.private_chats.length} پیام در تاریخچه اتاق ${state.privateRoom}`;
-    },
-    hint: 'توجه: اگر نام اتاق عددی و کمتر از 10000000 باشد، سرور عمداً آن را ذخیره نمی‌کند.'
-  },
-  {
-    title: 'ضدفلود: پیام دوم باید با خطای کول‌داون رد شود',
-    async run() {
-      await freshAuthA();
-      const t1 = 'flooda' + rand(4), t2 = 'floodb' + rand(4);
-      const first = B.waitFor(isMsg(t1), 'پیام اول روی B');
-      const errWait = A.waitFor(p => p && p.type === 'error', 'خطای کول‌داون روی A');
-      await A.sendMessage(CFG.publicRoom, t1);
-      await first;
-      await A.sendMessage(CFG.publicRoom, t2);
-      return 'پیام دوم رد شد → "' + (await errWait).message + '"';
-    },
-    hint: 'اگر خطا نیامد یعنی Redis کول‌داون را ثبت نمی‌کند و ضدفلود عملاً غیرفعال است.'
-  },
-  {
-    title: 'فیلتر: حذف شماره موبایل و کاراکترهای خاص',
-    async run() {
-      await freshAuthA();
-      const a = 'aa' + randAlpha(4), b = 'bb' + randAlpha(4);
-      const raw = `${a}09121234567${b}!@#$%`;
-      const expected = a + b;
-      const wait = B.waitFor(p => p && p.type === 'get_other_user_chat' &&
-        p.chat_message_object && String(p.chat_message_object.message).includes(a), 'پیام فیلترشده روی B');
-      await A.sendMessage(CFG.publicRoom, raw);
-      const received = (await wait).chat_message_object.message;
-      if (received !== expected) throw new Error(`انتظار «${expected}» بود ولی «${received}» رسید`);
-      return `«${raw}» → «${received}»`;
-    }
-  },
-  {
-    title: 'ارسال بدون احراز هویت → request_user_details',
-    async run() {
-      const temp = new TempClient();
-      try {
-        await temp.connect();
-        const wait = temp.waitFor(p => p && p.type === 'request_user_details', 'request_user_details');
-        await temp.emit('send_chat_message', { room_name: CFG.publicRoom, message: 'no auth ' + rand(4) });
-        await wait;
-        return 'سرور همان‌طور که انتظار می‌رفت user_details درخواست کرد';
-      } finally { temp.close(); }
-    }
-  },
-  {
-    title: 'ورودی خراب (payload رمزنشده) نباید سرور را بیندازد',
-    async run() {
-      const temp = new TempClient();
-      try {
-        await temp.connect();
-        temp.socket.emit('get_user_details', 'not-encrypted-at-all');
-        temp.socket.emit('join_chat_room', 'garbage:data');
-        temp.socket.emit('send_chat_message', '###');
-        await sleep(1500);
-        if (!temp.socket.connected) throw new Error('سوکت پس از ورودی خراب قطع شد');
-        // اثبات نهایی: یک اتصال کاملاً تازه هنوز جواب می‌گیرد
-        const probe = new TempClient();
-        try {
-          await probe.connect();
-          const wait = probe.waitFor(p => p && p.type === 'request_user_details', 'پاسخ سرور بعد از ورودی خراب');
-          await probe.emit('send_chat_message', { room_name: CFG.publicRoom, message: 'probe' });
-          await wait;
-        } finally { probe.close(); }
-        return 'سرور سالم ماند و به اتصال جدید پاسخ داد';
-      } finally { temp.close(); }
-    }
-  }
-];
 
 function resetResults() {
   document.querySelector('#results tbody').innerHTML = SCENARIOS.map((s, i) => `
@@ -575,12 +446,17 @@ async function runAllScenarios() {
   const btn = document.getElementById('runAll');
   btn.disabled = true;
   resetResults();
+
+  // هر بار ctx تازه، تا وضعیت اجرای قبلی نشت نکند
+  const ctx = { A, B, makeTempClient, publicRoom: CFG.publicRoom, state: {} };
+  for (const client of [A, B]) if (!client.isConnected()) await client.connect();
+
   for (let i = 0; i < SCENARIOS.length; i++) {
     const badge = document.getElementById('res-' + i);
     const detail = document.getElementById('det-' + i);
     badge.className = 'badge run'; badge.textContent = 'در حال اجرا'; detail.textContent = '…';
     try {
-      const info = await SCENARIOS[i].run();
+      const info = await SCENARIOS[i].run(ctx);
       badge.className = 'badge pass'; badge.textContent = 'موفق';
       detail.textContent = info || 'ok';
     } catch (err) {
