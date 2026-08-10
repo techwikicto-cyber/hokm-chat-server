@@ -3,144 +3,214 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>تستر چت سرور هکم</title>
+<title>کلاینت چت هکم — تست زنده</title>
 <style>
   :root {
     --bg: #0f1319; --panel: #161c24; --panel-2: #1d2530; --border: #2a3441;
     --text: #dbe3ec; --muted: #8695a8; --accent: #4da3ff;
-    --ok: #46c98b; --err: #ff6b6b; --warn: #ffb454; --sent: #b78bff;
+    --ok: #46c98b; --err: #ff6b6b; --warn: #ffb454; --mine: #2b4a6f;
   }
   * { box-sizing: border-box; }
-  body { margin: 0; padding: 16px; background: var(--bg); color: var(--text);
-         font-family: Tahoma, "Segoe UI", system-ui, sans-serif; font-size: 13px; }
-  h1 { font-size: 17px; margin: 0 0 4px; }
-  h2 { font-size: 14px; margin: 0 0 10px; }
-  .sub { color: var(--muted); font-size: 12px; margin-bottom: 14px; }
-  .panel { background: var(--panel); border: 1px solid var(--border);
-           border-radius: 10px; padding: 12px; margin-bottom: 14px; }
-  .grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
-  @media (max-width: 900px) { .grid2 { grid-template-columns: 1fr; } }
+  html, body { height: 100%; }
+  body {
+    margin: 0; padding: 12px; background: var(--bg); color: var(--text);
+    font-family: Tahoma, "Segoe UI", system-ui, sans-serif; font-size: 13px;
+    display: flex; flex-direction: column; gap: 12px; height: 100vh;
+  }
+  h1 { font-size: 15px; margin: 0; }
+  .panel { background: var(--panel); border: 1px solid var(--border); border-radius: 10px; }
   label { display: block; color: var(--muted); font-size: 11px; margin-bottom: 3px; }
-  input, select { width: 100%; padding: 6px 8px; border-radius: 6px; border: 1px solid var(--border);
-                  background: var(--panel-2); color: var(--text); font-family: inherit; font-size: 12px; }
+  input, select {
+    width: 100%; padding: 6px 8px; border-radius: 6px; border: 1px solid var(--border);
+    background: var(--panel-2); color: var(--text); font-family: inherit; font-size: 12px;
+  }
   input:focus, select:focus { outline: 1px solid var(--accent); }
   input.ltr { direction: ltr; text-align: left; font-family: Consolas, monospace; }
-  button { padding: 6px 12px; border-radius: 6px; border: 1px solid var(--border); background: var(--panel-2);
-           color: var(--text); cursor: pointer; font-family: inherit; font-size: 12px; white-space: nowrap; }
+  button {
+    padding: 7px 14px; border-radius: 6px; border: 1px solid var(--border);
+    background: var(--panel-2); color: var(--text); cursor: pointer;
+    font-family: inherit; font-size: 12px; white-space: nowrap;
+  }
   button:hover:not(:disabled) { border-color: var(--accent); color: #fff; }
   button:disabled { opacity: .45; cursor: not-allowed; }
   button.primary { background: var(--accent); border-color: var(--accent); color: #06101c; font-weight: bold; }
-  button.danger { border-color: #5a2b2b; }
-  .row { display: flex; gap: 8px; align-items: flex-end; flex-wrap: wrap; margin-bottom: 8px; }
-  .row > div { flex: 1; min-width: 90px; }
-  .fields { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; margin-bottom: 10px; }
-  .log { direction: ltr; text-align: left; background: #0b0f14; border: 1px solid var(--border);
-         border-radius: 8px; height: 300px; overflow-y: auto; padding: 8px;
-         font-family: "Cascadia Mono", Consolas, monospace; font-size: 11px; line-height: 1.5; }
-  .log .e { margin-bottom: 6px; border-left: 2px solid var(--border); padding-left: 6px;
-            white-space: pre-wrap; word-break: break-word; }
+
+  /* ---------- نوار بالا ---------- */
+  .topbar { padding: 10px 12px; display: flex; gap: 10px; align-items: flex-end; flex-wrap: wrap; }
+  .topbar > div { flex: 1; min-width: 130px; }
+  .chips { display: flex; gap: 6px; align-items: center; flex-wrap: wrap; margin-top: 8px; }
+  .chip {
+    padding: 3px 9px; border-radius: 20px; font-size: 11px; border: 1px solid var(--border);
+    color: var(--muted); direction: ltr;
+  }
+  .chip.on   { border-color: rgba(70,201,139,.5);  color: var(--ok); }
+  .chip.off  { border-color: rgba(255,107,107,.5); color: var(--err); }
+  .chip.warn { border-color: rgba(255,180,84,.5);  color: var(--warn); }
+
+  /* ---------- بدنه ---------- */
+  .body { flex: 1; display: grid; grid-template-columns: 1fr 380px; gap: 12px; min-height: 0; }
+  @media (max-width: 1000px) { .body { grid-template-columns: 1fr; } }
+
+  .chatcol { display: flex; flex-direction: column; min-height: 0; }
+  .roombar {
+    padding: 8px 12px; border-bottom: 1px solid var(--border);
+    display: flex; gap: 8px; align-items: center; flex-wrap: wrap;
+  }
+  .roombar .name { font-weight: bold; }
+  .roombar input { width: 150px; }
+
+  .messages { flex: 1; overflow-y: auto; padding: 12px; display: flex; flex-direction: column; gap: 8px; }
+  .msg { max-width: 78%; padding: 7px 10px; border-radius: 10px; background: var(--panel-2); align-self: flex-start; }
+  .msg.mine { background: var(--mine); align-self: flex-end; }
+  .msg .who { font-size: 11px; color: var(--muted); margin-bottom: 3px; }
+  .msg .text { white-space: pre-wrap; word-break: break-word; }
+  .msg .status { font-size: 11px; margin-top: 4px; color: var(--muted); }
+  .msg .status.ok   { color: var(--ok); }
+  .msg .status.err  { color: var(--err); }
+  .msg .status.warn { color: var(--warn); }
+  .msg.pending { opacity: .65; }
+  .divider { text-align: center; color: var(--muted); font-size: 11px; margin: 6px 0; }
+  .divider span { background: var(--panel); padding: 0 10px; }
+  .divider { border-top: 1px solid var(--border); line-height: 0; }
+  .divider span { position: relative; top: -1px; }
+
+  .composer { padding: 10px 12px; border-top: 1px solid var(--border); display: flex; gap: 8px; align-items: center; }
+  .composer input { flex: 1; padding: 9px 10px; font-size: 13px; }
+
+  /* ---------- ستون لاگ ---------- */
+  .logcol { display: flex; flex-direction: column; min-height: 0; }
+  .loghead { padding: 8px 12px; border-bottom: 1px solid var(--border); display: flex; justify-content: space-between; align-items: center; }
+  .log {
+    flex: 1; overflow-y: auto; padding: 8px; direction: ltr; text-align: left;
+    font-family: "Cascadia Mono", Consolas, monospace; font-size: 11px; line-height: 1.55;
+  }
+  .log .e { margin-bottom: 5px; border-left: 2px solid var(--border); padding-left: 6px; white-space: pre-wrap; word-break: break-word; }
   .log .e.in { border-left-color: var(--ok); }
-  .log .e.out { border-left-color: var(--sent); }
+  .log .e.out { border-left-color: var(--accent); }
   .log .e.err { border-left-color: var(--err); color: #ffb3b3; }
+  .log .e.warn { border-left-color: var(--warn); color: #ffd9a8; }
   .log .e.sys { border-left-color: var(--muted); color: var(--muted); }
   .log .t { color: var(--muted); }
-  .dot { display: inline-block; width: 8px; height: 8px; border-radius: 50%; background: #555;
-         margin-left: 6px; vertical-align: middle; }
-  .dot.on { background: var(--ok); } .dot.off { background: var(--err); }
+
+  details.tests { padding: 0 12px 10px; }
+  details.tests summary { cursor: pointer; padding: 10px 0; color: var(--muted); font-size: 12px; }
   table { width: 100%; border-collapse: collapse; font-size: 12px; }
-  th, td { text-align: right; padding: 6px 8px; border-bottom: 1px solid var(--border); vertical-align: top; }
+  th, td { text-align: right; padding: 5px 8px; border-bottom: 1px solid var(--border); vertical-align: top; }
   th { color: var(--muted); font-weight: normal; font-size: 11px; }
-  td.detail { direction: ltr; text-align: left; font-family: Consolas, monospace;
-              font-size: 11px; color: var(--muted); white-space: pre-wrap; }
+  td.detail { direction: ltr; text-align: left; font-family: Consolas, monospace; font-size: 11px; color: var(--muted); white-space: pre-wrap; }
   .badge { padding: 2px 8px; border-radius: 20px; font-size: 11px; white-space: nowrap; }
   .badge.pass { background: rgba(70,201,139,.15); color: var(--ok); }
   .badge.fail { background: rgba(255,107,107,.15); color: var(--err); }
   .badge.run  { background: rgba(77,163,255,.15); color: var(--accent); }
   .badge.skip { background: rgba(134,149,168,.15); color: var(--muted); }
-  .meta { color: var(--muted); font-size: 11px; direction: ltr; text-align: left;
-          font-family: Consolas, monospace; white-space: pre-wrap; }
-  .hint { border-radius: 8px; padding: 8px 10px; margin-top: 10px; font-size: 12px; }
-  .hint.warn { background: rgba(255,180,84,.1); border: 1px solid rgba(255,180,84,.35); color: var(--warn); }
-  .hint.bad  { background: rgba(255,107,107,.1); border: 1px solid rgba(255,107,107,.35); color: var(--err); }
-  .split { display: flex; justify-content: space-between; align-items: center; gap: 10px; }
-  .disabled-area { opacity: .4; pointer-events: none; }
+  .banner { margin: 10px 12px 0; padding: 8px 10px; border-radius: 8px; font-size: 12px; display: none; }
+  .banner.bad  { display: block; background: rgba(255,107,107,.1); border: 1px solid rgba(255,107,107,.35); color: var(--err); }
+  .banner.warn { display: block; background: rgba(255,180,84,.1);  border: 1px solid rgba(255,180,84,.35); color: var(--warn); }
 </style>
 </head>
 <body>
 
-<h1>تستر چت سرور هکم</h1>
-<div class="sub">
-  ابزار مستقل — به سرور چت دست نمی‌زند. آدرس سرور را وارد کنید تا دو کلاینت سوکت به آن وصل شوند.
-</div>
-
+<!-- ===================== نوار اتصال ===================== -->
 <div class="panel">
-  <h2>اتصال به سرور چت</h2>
-  <div class="row">
+  <div class="topbar">
+    <div style="flex:0 0 100%"><h1>کلاینت چت هکم — تست زنده</h1></div>
     <div style="flex:2">
-      <label>آدرس سرور چت (IP و پورت)</label>
+      <label>آدرس سرور چت</label>
       <input id="serverUrl" class="ltr" placeholder="http://1.2.3.4:3008">
     </div>
     <div style="flex:2">
-      <label>کلید AES — دقیقاً ۳۲ کاراکتر (AES_ENCRYPTION_SECRET_KEY)</label>
-      <input id="aesKey" class="ltr">
+      <label>کلید AES (۳۲ کاراکتر)</label>
+      <input id="aesKey" class="ltr" type="password">
     </div>
     <div style="flex:1">
-      <label>نام اتاق عمومی</label>
+      <label>اتاق عمومی</label>
       <input id="publicRoom" class="ltr" value="public_chat_room">
+    </div>
+    <div style="flex:1">
+      <label>نام نمایشی شما</label>
+      <input id="myName" value="من">
     </div>
     <button id="btnConnect" class="primary">اتصال</button>
   </div>
-  <div id="serverInfo" class="meta">وصل نشده.</div>
-  <div id="serverHint"></div>
+  <div class="chips" style="padding: 0 12px 10px">
+    <span class="chip" id="chipConn">قطع</span>
+    <span class="chip" id="chipTransport">transport: —</span>
+    <span class="chip" id="chipRtt">ping: —</span>
+    <span class="chip" id="chipMe">کاربر: —</span>
+  </div>
+  <div class="banner" id="banner"></div>
 </div>
 
-<div id="workArea" class="disabled-area">
-  <div class="grid2">
-    <div class="panel" id="panel-A"></div>
-    <div class="panel" id="panel-B"></div>
+<!-- ===================== بدنه ===================== -->
+<div class="body">
+  <!-- چت -->
+  <div class="panel chatcol">
+    <div class="roombar">
+      <span class="name" id="roomName">—</span>
+      <span style="flex:1"></span>
+      <input id="roomInput" class="ltr" placeholder="اتاق خصوصی، مثلاً 20000001">
+      <button id="btnJoin" disabled>ورود به اتاق</button>
+      <button id="btnPublic" disabled>اتاق عمومی</button>
+      <button id="btnHistory" disabled>تازه‌سازی تاریخچه</button>
+      <button id="btnNewId" disabled title="گرفتن user_id تازه برای دور زدن کول‌داون">کاربر تازه</button>
+    </div>
+    <div class="messages" id="messages"></div>
+    <div class="composer">
+      <input id="msgInput" placeholder="پیامتان را بنویسید و Enter بزنید…" disabled>
+      <button id="btnSend" class="primary" disabled>ارسال</button>
+    </div>
   </div>
 
-  <div class="panel">
-    <div class="split" style="margin-bottom:10px">
-      <h2 style="margin:0">تست‌های خودکار</h2>
-      <div style="display:flex; gap:8px">
-        <button id="runAll" class="primary">اجرای همه تست‌ها</button>
-        <button id="btnReset">پاک کردن نتایج</button>
+  <!-- لاگ -->
+  <div class="panel logcol">
+    <div class="loghead">
+      <strong>لاگ و مشکلات</strong>
+      <div style="display:flex; gap:6px; align-items:center">
+        <label style="display:flex; align-items:center; gap:4px; margin:0; white-space:nowrap">
+          <input type="checkbox" id="rawToggle" style="width:auto"> خام
+        </label>
+        <button id="btnClearLog">پاک</button>
       </div>
     </div>
-    <div class="sub" style="margin:0 0 8px">
-      سرور روی هر <code>user_id</code> کول‌داون ۸ ثانیه‌ای دارد، پس قبل از هر ارسال یک شناسه تصادفی برای کلاینت A ساخته می‌شود.
-    </div>
-    <table id="results">
-      <thead><tr><th style="width:30px">#</th><th style="width:34%">تست</th><th style="width:90px">نتیجه</th><th>جزئیات</th></tr></thead>
-      <tbody></tbody>
-    </table>
+    <div class="log" id="log"></div>
+    <details class="tests">
+      <summary>تست‌های خودکار (۹ سناریو)</summary>
+      <div style="display:flex; gap:8px; margin-bottom:8px">
+        <button id="runAll" disabled>اجرا</button>
+        <button id="btnResetTests">پاک کردن</button>
+      </div>
+      <table id="results"><tbody></tbody></table>
+    </details>
   </div>
 </div>
 
 <script src="/lib/scenarios.js"></script>
 <script>
-// ===================== تنظیمات و ذخیره‌سازی =====================
+// ===================== تنظیمات =====================
 const DEFAULTS = {
   serverUrl: 'http://127.0.0.1:3008',
   aesKey: 'p2s5v8y/B?E(H+MbPeShVmYq3t6w9z$C',
-  publicRoom: 'public_chat_room'
+  publicRoom: 'public_chat_room',
+  myName: 'من'
 };
-const CFG = { serverUrl: '', aesKey: '', publicRoom: '' };
+const CFG = {};
 const COOLDOWN_SECONDS = 8;
+const DELIVERY_TIMEOUT = 10000;
+
+const $ = (id) => document.getElementById(id);
 
 function loadSettings() {
   let saved = {};
-  try { saved = JSON.parse(localStorage.getItem('hokm-tester') || '{}'); } catch (e) {}
-  document.getElementById('serverUrl').value  = saved.serverUrl  || DEFAULTS.serverUrl;
-  document.getElementById('aesKey').value     = saved.aesKey     || DEFAULTS.aesKey;
-  document.getElementById('publicRoom').value = saved.publicRoom || DEFAULTS.publicRoom;
+  try { saved = JSON.parse(localStorage.getItem('hokm-chat-client') || '{}'); } catch (e) {}
+  ['serverUrl', 'aesKey', 'publicRoom', 'myName'].forEach(k => {
+    $(k).value = saved[k] || DEFAULTS[k];
+  });
 }
 function saveSettings() {
-  try { localStorage.setItem('hokm-tester', JSON.stringify(CFG)); } catch (e) {}
+  try { localStorage.setItem('hokm-chat-client', JSON.stringify(CFG)); } catch (e) {}
 }
 
-// ===================== کمک‌کارها =====================
+// ===================== رمزنگاری از طریق پروسه Node این ابزار =====================
 async function api(path, body) {
   const res = await fetch(path, {
     method: 'POST',
@@ -154,32 +224,372 @@ async function api(path, body) {
 const encryptPayload = async (payload) => (await api('/api/encrypt', { payload })).data;
 const decryptPayload = async (data) => (await api('/api/decrypt', { data })).payload;
 
-function randFrom(chars, n) {
-  let s = '';
-  for (let i = 0; i < n; i++) s += chars[Math.floor(Math.random() * chars.length)];
-  return s;
-}
-const rand = (n = 6) => randFrom('abcdefghijklmnopqrstuvwxyz0123456789', n);
-const randAlpha = (n = 4) => randFrom('abcdefghijklmnopqrstuvwxyz', n);
-const sleep = (ms) => new Promise(r => setTimeout(r, ms));
-
 function escapeHtml(s) {
   return String(s).replace(/[&<>]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;' }[c]));
 }
+const rand = (n = 6) => {
+  const cs = 'abcdefghijklmnopqrstuvwxyz0123456789';
+  let s = ''; for (let i = 0; i < n; i++) s += cs[Math.floor(Math.random() * cs.length)];
+  return s;
+};
 
-function summarize(p) {
-  if (!p || !p.type) return String(p);
-  switch (p.type) {
-    case 'get_privious_public_chats':  return `تاریخچه عمومی (${(p.public_chats || []).length} پیام)`;
-    case 'get_privious_private_chats': return `تاریخچه خصوصی (${(p.private_chats || []).length} پیام)`;
-    case 'get_other_user_chat':        return `پیام جدید در «${p.room_name}»: ${p.chat_message_object && p.chat_message_object.message}`;
-    case 'request_user_details':       return 'سرور درخواست user_details کرد';
-    case 'error':                      return 'خطا: ' + p.message;
-    default:                           return p.type;
+// ===================== لاگ =====================
+function log(kind, title, body) {
+  const el = $('log');
+  const div = document.createElement('div');
+  div.className = 'e ' + kind;
+  div.innerHTML = `<span class="t">[${new Date().toLocaleTimeString('en-GB')}]</span> ${escapeHtml(title)}` +
+    (body !== undefined ? '\n' + escapeHtml(typeof body === 'string' ? body : JSON.stringify(body, null, 2)) : '');
+  el.appendChild(div);
+  el.scrollTop = el.scrollHeight;
+}
+function banner(kind, text) {
+  const b = $('banner');
+  b.className = 'banner ' + (kind || '');
+  b.textContent = text || '';
+  if (!text) b.className = 'banner';
+}
+
+// ===================== کلاینت سوکت =====================
+// دو اتصال باز می‌شود:
+//   ME     شما — پیام‌ها را این می‌فرستد
+//   WATCH  کاربر دومی که در همان اتاق نشسته
+// دلیلش: سرور با socket.to(room) پخش می‌کند، یعنی فرستنده پیام خودش را
+// هرگز دریافت نمی‌کند. بدون کاربر دوم هیچ راهی نیست بفهمیم پیام واقعاً رفته یا نه.
+class Client {
+  constructor(id, details) {
+    this.id = id;
+    this.details = details;
+    this.socket = null;
+    this.waiters = new Set();
+    this.chain = Promise.resolve();
+    this.onPayload = () => {};
+    this.decryptFailures = 0;
+  }
+
+  connect() {
+    if (this.socket) this.socket.disconnect();
+    this.socket = io(CFG.serverUrl, { forceNew: true, transports: ['websocket', 'polling'] });
+
+    this.socket.on('get_data', (raw) => this.handle(raw));
+    this.socket.on('disconnect', (reason) => {
+      log('warn', `[${this.id}] قطع شد: ${reason}`);
+      if (this.id === 'ME') setConnected(false);
+    });
+    this.socket.on('connect_error', (err) => {
+      log('err', `[${this.id}] connect_error: ` + (err && err.message ? err.message : err));
+    });
+
+    return new Promise((resolve, reject) => {
+      const t = setTimeout(() => reject(new Error(`اتصال ${this.id} تایم‌اوت شد`)), 10000);
+      this.socket.on('connect', () => {
+        clearTimeout(t);
+        log('sys', `[${this.id}] متصل شد — socket id = ${this.socket.id}`);
+        resolve();
+      });
+    });
+  }
+
+  isConnected() { return !!(this.socket && this.socket.connected); }
+  close() { if (this.socket) { this.socket.disconnect(); this.socket = null; } }
+  transport() {
+    try { return this.socket.io.engine.transport.name; } catch (e) { return 'unknown'; }
+  }
+
+  handle(raw) {
+    this.chain = this.chain.then(async () => {
+      if ($('rawToggle').checked) log('sys', `[${this.id}] raw`, raw && raw.data);
+      if (!raw || typeof raw.data !== 'string') return log('err', `[${this.id}] get_data بدون فیلد data`, raw);
+
+      let payload;
+      try {
+        payload = await decryptPayload(raw.data);
+      } catch (err) {
+        this.decryptFailures++;
+        log('err', `[${this.id}] رمزگشایی ناموفق — کلید AES اشتباه است؟`, err.message);
+        banner('bad', 'کلید AES اشتباه است: سرور جواب می‌دهد ولی محتوایش رمزگشایی نمی‌شود.');
+        return;
+      }
+      this.waiters.forEach(w => w(payload));
+      this.onPayload(payload);
+    }).catch(err => log('err', `[${this.id}] خطای داخلی: ` + err.message));
+  }
+
+  waitFor(predicate, label, timeout = 10000) {
+    return new Promise((resolve, reject) => {
+      const waiter = (p) => { let m = false; try { m = predicate(p); } catch (e) {} if (m) { done(); resolve(p); } };
+      const timer = setTimeout(() => { done(); reject(new Error(`${this.id}: تایم‌اوت در انتظار «${label}»`)); }, timeout);
+      const done = () => { clearTimeout(timer); this.waiters.delete(waiter); };
+      this.waiters.add(waiter);
+    });
+  }
+
+  async sendRaw(event, payload) {
+    if (!this.isConnected()) throw new Error(`${this.id} متصل نیست`);
+    if ($('rawToggle').checked) log('out', `[${this.id}] → ${event}`, payload);
+    this.socket.emit(event, await encryptPayload(payload));
+  }
+  emitRaw(event, s) { this.socket.emit(event, s); }
+
+  rotateUserId() {
+    this.details.user_id = (this.id === 'ME' ? 'you_' : 'watch_') + rand(6);
+    if (this.id === 'ME') trackMyIds();
+    return this.details.user_id;
+  }
+  async sendUserDetails() {
+    const p = this.waitFor(x => x && x.type === 'get_privious_public_chats', 'تاریخچه عمومی');
+    await this.sendRaw('get_user_details', this.details);
+    return p;
+  }
+  async joinRoom(room) {
+    const p = this.waitFor(x => x && x.type === 'get_privious_private_chats', 'تاریخچه خصوصی');
+    await this.sendRaw('join_chat_room', { room_name: room });
+    return p;
+  }
+  async sendMessage(room, message) {
+    await this.sendRaw('send_chat_message', { room_name: room, message });
   }
 }
 
-// کتابخانه کلاینت را از خودِ سرور چت می‌گیریم تا نسخه‌اش دقیقاً بخواند
+const ME = new Client('ME', {
+  user_id: 'you_' + rand(6), user_name: 'من',
+  user_uniquename: 'uniq_you', user_avatar_id: 1, user_level: 1
+});
+const WATCH = new Client('WATCH', {
+  user_id: 'watch_' + rand(6), user_name: 'watcher',
+  user_uniquename: 'uniq_watch', user_avatar_id: 2, user_level: 1
+});
+
+// ===================== وضعیت چت =====================
+let currentRoom = '';
+let isPublic = true;
+let lastSendAt = 0;
+let cooldownTimer = null;
+let pending = null;   // {text, el, sentAt, timer}
+
+// هر شناسه‌ای که در این نشست داشته‌ایم — «کاربر تازه» شناسه را عوض می‌کند،
+// ولی پیام‌های قبلیِ خودمان در تاریخچه با شناسه قدیمی ذخیره شده‌اند.
+const myIds = new Set();
+function trackMyIds() {
+  myIds.add(ME.details.user_id);
+  if (ME.details.user_uniquename) myIds.add(ME.details.user_uniquename);
+}
+function myIdInRoom() {
+  return isPublic ? ME.details.user_id : (ME.details.user_uniquename || ME.details.user_id);
+}
+function isFromMe(chat) {
+  const s = chat.sender_details || {};
+  return myIds.has(s.user_id) || (s.user_uniquename && myIds.has(s.user_uniquename));
+}
+
+// ===================== نمایش پیام‌ها =====================
+function clearMessages() { $('messages').innerHTML = ''; }
+
+function addDivider(text) {
+  const d = document.createElement('div');
+  d.className = 'divider';
+  d.innerHTML = `<span>${escapeHtml(text)}</span>`;
+  $('messages').appendChild(d);
+  scrollDown();
+}
+
+function addMessage(chat, opts = {}) {
+  const s = chat.sender_details || {};
+  const el = document.createElement('div');
+  el.className = 'msg' + (opts.mine ? ' mine' : '') + (opts.pending ? ' pending' : '');
+  el.innerHTML =
+    `<div class="who">${escapeHtml(s.user_name || s.user_id || '?')}` +
+    (s.user_level != null ? ` · lvl ${s.user_level}` : '') +
+    (chat.message_time ? ` · ${new Date(chat.message_time).toLocaleTimeString('en-GB')}` : '') +
+    `</div><div class="text">${escapeHtml(chat.message)}</div>` +
+    (opts.status ? `<div class="status">${escapeHtml(opts.status)}</div>` : '');
+  $('messages').appendChild(el);
+  scrollDown();
+  return el;
+}
+
+function setStatus(el, cls, text) {
+  let s = el.querySelector('.status');
+  if (!s) { s = document.createElement('div'); el.appendChild(s); }
+  s.className = 'status ' + cls;
+  s.textContent = text;
+}
+
+function scrollDown() { const m = $('messages'); m.scrollTop = m.scrollHeight; }
+
+function renderHistory(chats, label) {
+  clearMessages();
+  const list = chats || [];
+  addDivider(list.length ? `${label} — ${list.length} پیام قبلی` : `${label} — تاریخچه‌ای نیست`);
+  list.forEach(chat => addMessage(chat, { mine: isFromMe(chat) }));
+  addDivider('از اینجا زنده است');
+  log('sys', `${label}: ${list.length} پیام تاریخچه بارگذاری شد`);
+}
+
+// ===================== ارسال و تأیید رسیدن =====================
+async function sendCurrent() {
+  const input = $('msgInput');
+  const text = input.value;
+  if (!text.trim()) return;
+
+  if (pending) { log('warn', 'هنوز منتظر تأیید پیام قبلی هستم'); return; }
+
+  const el = addMessage(
+    { sender_details: { user_name: CFG.myName, user_level: ME.details.user_level }, message: text, message_time: Date.now() },
+    { mine: true, pending: true, status: 'در حال ارسال…' }
+  );
+
+  const sentAt = Date.now();
+  pending = {
+    text, el, sentAt,
+    timer: setTimeout(() => {
+      el.classList.remove('pending');
+      setStatus(el, 'err', '✘ نرسید — هیچ کاربری این پیام را دریافت نکرد');
+      log('err', 'پیام به هیچ کلاینتی نرسید', text);
+      log('warn',
+        'علت‌های محتمل:\n' +
+        '• Redis روی سرور بالا نیست — ضدفلود قبل از ارسال به آن نیاز دارد و خطا را بی‌صدا می‌بلعد\n' +
+        '• سرور در حالت cluster بدون SHOULD_USE_NGINX_REDIS — شما و watcher روی دو worker جدا افتاده‌اید\n' +
+        '• فیلتر UGC پیام را کامل حذف کرده');
+      pending = null;
+    }, DELIVERY_TIMEOUT)
+  };
+
+  input.value = '';
+
+  try {
+    await ME.sendMessage(currentRoom, text);
+    setStatus(el, '', 'فرستاده شد، منتظر تأیید…');
+    lastSendAt = sentAt;
+    startCooldown();
+  } catch (err) {
+    clearTimeout(pending.timer);
+    pending = null;
+    el.classList.remove('pending');
+    setStatus(el, 'err', '✘ ارسال ناموفق: ' + err.message);
+    log('err', 'ارسال ناموفق: ' + err.message);
+  }
+}
+
+// WATCH چشم ماست: هر چه به اتاق برسد اینجا دیده می‌شود
+WATCH.onPayload = (p) => {
+  if (!p || p.type !== 'get_other_user_chat') return;
+  if (p.room_name !== currentRoom) return;
+
+  const chat = p.chat_message_object;
+  const senderId = chat.sender_details && chat.sender_details.user_id;
+
+  if (pending && senderId === myIdInRoom()) {
+    const rtt = Date.now() - pending.sentAt;
+    clearTimeout(pending.timer);
+    pending.el.classList.remove('pending');
+
+    if (chat.message !== pending.text) {
+      setStatus(pending.el, 'warn', `✔ رسید در ${rtt}ms — ولی سرور متن را عوض کرد: «${chat.message}»`);
+      log('warn', 'سرور متن پیام را فیلتر کرد',
+        `فرستادید: ${pending.text}\nرسید:     ${chat.message}\nعلت: حذف کاراکترهای خاص و شماره موبایل`);
+    } else {
+      setStatus(pending.el, 'ok', `✔ رسید در ${rtt}ms`);
+      log('in', `پیام شما به کاربر دوم رسید (${rtt}ms)`);
+    }
+    $('chipRtt').textContent = 'ping: ' + rtt + 'ms';
+    $('chipRtt').className = 'chip ' + (rtt < 300 ? 'on' : 'warn');
+    pending = null;
+    return;
+  }
+
+  // پیام از یک کاربر واقعیِ دیگر
+  addMessage(chat, { mine: false });
+  log('in', `پیام از ${chat.sender_details && chat.sender_details.user_name}`, chat.message);
+};
+
+ME.onPayload = (p) => {
+  if (!p) return;
+  if (p.type === 'error') {
+    if (pending) {
+      clearTimeout(pending.timer);
+      pending.el.classList.remove('pending');
+      setStatus(pending.el, 'err', '✘ سرور رد کرد: ' + p.message);
+      pending = null;
+    }
+    log('err', 'سرور پیام را رد کرد: ' + p.message);
+    log('warn', `کول‌داون ${COOLDOWN_SECONDS} ثانیه‌ای روی هر user_id است. صبر کنید یا «کاربر تازه» را بزنید.`);
+    return;
+  }
+  if (p.type === 'request_user_details') {
+    log('warn', 'سرور درخواست احراز هویت دوباره کرد — دارم می‌فرستم');
+    ME.sendUserDetails().catch(err => log('err', err.message));
+  }
+};
+
+// ===================== کول‌داون =====================
+function startCooldown() {
+  clearInterval(cooldownTimer);
+  const btn = $('btnSend');
+  let left = COOLDOWN_SECONDS;
+  const tick = () => {
+    if (left <= 0) {
+      clearInterval(cooldownTimer);
+      btn.textContent = 'ارسال';
+      btn.disabled = !ME.isConnected();
+      return;
+    }
+    btn.textContent = `ارسال (${left})`;
+    left--;
+  };
+  tick();
+  cooldownTimer = setInterval(tick, 1000);
+}
+
+// ===================== اتاق‌ها =====================
+async function joinPrivate(room) {
+  if (!room) { log('err', 'نام اتاق خالی است'); return; }
+  try {
+    const [mine] = await Promise.all([ME.joinRoom(room), WATCH.joinRoom(room)]);
+    currentRoom = room;
+    isPublic = false;
+    $('roomName').textContent = 'اتاق خصوصی: ' + room;
+    renderHistory(mine.private_chats, 'اتاق ' + room);
+    if (!isNaN(room) && parseInt(room, 10) < 10000000) {
+      banner('warn', 'نام اتاق عددی و کمتر از 10000000 است — سرور عمداً پیام‌های این اتاق را در دیتابیس ذخیره نمی‌کند. پخش زنده کار می‌کند ولی تاریخچه ذخیره نمی‌شود.');
+    } else {
+      banner('');
+    }
+  } catch (err) {
+    log('err', 'ورود به اتاق ناموفق: ' + err.message);
+  }
+}
+
+async function goPublic() {
+  try {
+    const [mine] = await Promise.all([ME.sendUserDetails(), WATCH.sendUserDetails()]);
+    currentRoom = CFG.publicRoom;
+    isPublic = true;
+    $('roomName').textContent = 'اتاق عمومی: ' + currentRoom;
+    renderHistory(mine.public_chats, 'اتاق عمومی');
+    banner('');
+  } catch (err) {
+    log('err', 'رفتن به اتاق عمومی ناموفق: ' + err.message);
+  }
+}
+
+async function refreshHistory() {
+  try {
+    if (isPublic) renderHistory((await ME.sendUserDetails()).public_chats, 'اتاق عمومی');
+    else renderHistory((await ME.joinRoom(currentRoom)).private_chats, 'اتاق ' + currentRoom);
+  } catch (err) {
+    log('err', 'خواندن تاریخچه ناموفق: ' + err.message);
+  }
+}
+
+// ===================== اتصال =====================
+function setConnected(on) {
+  $('chipConn').textContent = on ? 'متصل' : 'قطع';
+  $('chipConn').className = 'chip ' + (on ? 'on' : 'off');
+  ['btnJoin', 'btnPublic', 'btnHistory', 'btnNewId', 'msgInput', 'btnSend', 'runAll']
+    .forEach(id => { $(id).disabled = !on; });
+}
+
 function loadSocketIoClient(baseUrl) {
   return new Promise((resolve, reject) => {
     if (window.io) return resolve();
@@ -191,333 +601,130 @@ function loadSocketIoClient(baseUrl) {
   });
 }
 
-// ===================== کلاینت تست =====================
-class TestClient {
-  constructor(id) {
-    this.id = id;
-    this.socket = null;
-    this.waiters = new Set();
-    this.chain = Promise.resolve();
-    this.render();
-  }
-
-  render() {
-    document.getElementById('panel-' + this.id).innerHTML = `
-      <div class="split" style="margin-bottom:10px">
-        <h2 style="margin:0">کلاینت ${this.id} <span class="dot off" id="dot-${this.id}"></span>
-          <span class="meta" id="status-${this.id}" style="display:inline">disconnected</span></h2>
-        <div style="display:flex; gap:6px">
-          <button id="btn-conn-${this.id}">اتصال</button>
-          <button id="btn-disc-${this.id}" class="danger" disabled>قطع</button>
-        </div>
-      </div>
-
-      <div class="fields">
-        <div><label>user_id</label><input id="uid-${this.id}" class="ltr" value="${this.id.toLowerCase()}_${rand(4)}"></div>
-        <div><label>user_name</label><input id="uname-${this.id}" class="ltr" value="player_${this.id}"></div>
-        <div><label>user_uniquename</label><input id="uuniq-${this.id}" class="ltr" value="uniq_${this.id.toLowerCase()}"></div>
-        <div><label>user_avatar_id</label><input id="uavatar-${this.id}" type="number" value="3"></div>
-        <div><label>user_level</label><input id="ulevel-${this.id}" type="number" value="12"></div>
-        <div style="display:flex; align-items:flex-end">
-          <button style="width:100%" id="btn-auth-${this.id}" disabled>get_user_details</button>
-        </div>
-      </div>
-
-      <div class="row">
-        <div style="flex:2"><label>room_name (اتاق خصوصی)</label>
-          <input id="roomInput-${this.id}" class="ltr" placeholder="مثلاً 20000001"></div>
-        <button id="btn-join-${this.id}" disabled>join_chat_room</button>
-      </div>
-
-      <div class="row">
-        <div style="flex:3"><label>پیام</label><input id="msg-${this.id}" value="سلام ${this.id}"></div>
-        <div style="flex:1"><label>ارسال به</label>
-          <select id="target-${this.id}">
-            <option value="__public__">اتاق عمومی</option>
-            <option value="__room__">اتاق بالا</option>
-          </select></div>
-        <button id="btn-send-${this.id}" disabled>send_chat_message</button>
-      </div>
-
-      <div class="row" style="margin-bottom:6px; align-items:center">
-        <button id="btn-clear-${this.id}">پاک کردن لاگ</button>
-        <label style="display:flex; align-items:center; gap:5px; color:var(--muted); white-space:nowrap; margin:0">
-          <input type="checkbox" id="raw-${this.id}" style="width:auto"> نمایش payload رمزشده
-        </label>
-        <span style="flex:1"></span>
-      </div>
-      <div class="log" id="log-${this.id}"></div>
-    `;
-
-    const $ = (p) => document.getElementById(p + '-' + this.id);
-    const guard = (fn) => () => { Promise.resolve().then(fn).catch(err => this.log('err', err.message)); };
-    $('btn-conn').onclick = guard(() => this.connect());
-    $('btn-disc').onclick = () => this.disconnect();
-    $('btn-auth').onclick = guard(() => this.sendUserDetails());
-    $('btn-join').onclick = guard(() => this.joinRoom($('roomInput').value.trim()));
-    $('btn-send').onclick = guard(() => {
-      const room = $('target').value === '__public__' ? CFG.publicRoom : $('roomInput').value.trim();
-      return this.sendMessage(room, $('msg').value);
-    });
-    $('btn-clear').onclick = () => { $('log').innerHTML = ''; };
-  }
-
-  log(kind, title, body) {
-    const el = document.getElementById('log-' + this.id);
-    const div = document.createElement('div');
-    div.className = 'e ' + kind;
-    div.innerHTML = `<span class="t">[${new Date().toLocaleTimeString('en-GB')}]</span> ${escapeHtml(title)}` +
-      (body !== undefined ? '\n' + escapeHtml(typeof body === 'string' ? body : JSON.stringify(body, null, 2)) : '');
-    el.appendChild(div);
-    el.scrollTop = el.scrollHeight;
-  }
-
-  setConnected(on, statusText) {
-    document.getElementById('dot-' + this.id).className = 'dot ' + (on ? 'on' : 'off');
-    document.getElementById('status-' + this.id).textContent = statusText;
-    ['btn-auth', 'btn-join', 'btn-send'].forEach(p => document.getElementById(p + '-' + this.id).disabled = !on);
-    document.getElementById('btn-conn-' + this.id).disabled = on;
-    document.getElementById('btn-disc-' + this.id).disabled = !on;
-  }
-
-  connect() {
-    if (this.socket) this.socket.disconnect();
-    this.log('sys', 'در حال اتصال به ' + CFG.serverUrl + ' …');
-    this.socket = io(CFG.serverUrl, { forceNew: true, transports: ['websocket', 'polling'] });
-
-    this.socket.on('disconnect', (reason) => {
-      this.setConnected(false, 'disconnected');
-      this.log('sys', 'قطع شد: ' + reason);
-    });
-    this.socket.on('connect_error', (err) => {
-      this.log('err', 'connect_error: ' + (err && err.message ? err.message : err));
-    });
-    this.socket.on('get_data', (raw) => this.handleGetData(raw));
-
-    return new Promise((resolve, reject) => {
-      const t = setTimeout(() => reject(new Error(`کلاینت ${this.id}: اتصال تایم‌اوت شد`)), 10000);
-      this.socket.on('connect', () => {
-        clearTimeout(t);
-        this.setConnected(true, 'connected (' + this.socket.id + ')');
-        this.log('sys', 'متصل شد → socket id = ' + this.socket.id);
-        resolve();
-      });
-    });
-  }
-
-  disconnect() {
-    if (this.socket) { this.socket.disconnect(); this.socket = null; }
-    this.setConnected(false, 'disconnected');
-  }
-
-  handleGetData(raw) {
-    // رمزگشایی async است؛ زنجیره می‌کنیم تا ترتیب لاگ به‌هم نریزد
-    this.chain = this.chain.then(async () => {
-      if (document.getElementById('raw-' + this.id).checked) this.log('sys', 'raw get_data', raw && raw.data);
-      if (!raw || typeof raw.data !== 'string') return this.log('err', 'get_data بدون فیلد data', raw);
-
-      let payload;
-      try { payload = await decryptPayload(raw.data); }
-      catch (err) { return this.log('err', 'رمزگشایی ناموفق: ' + err.message, raw.data); }
-
-      this.log(payload && payload.type === 'error' ? 'err' : 'in', '← get_data : ' + summarize(payload), payload);
-      this.waiters.forEach(w => w(payload));
-    }).catch(err => this.log('err', 'خطای داخلی: ' + err.message));
-  }
-
-  waitFor(predicate, label, timeout = 9000) {
-    return new Promise((resolve, reject) => {
-      const waiter = (payload) => {
-        let matched = false;
-        try { matched = predicate(payload); } catch (e) { matched = false; }
-        if (matched) { cleanup(); resolve(payload); }
-      };
-      const timer = setTimeout(() => {
-        cleanup();
-        reject(new Error(`کلاینت ${this.id}: تایم‌اوت در انتظار «${label}»`));
-      }, timeout);
-      const cleanup = () => { clearTimeout(timer); this.waiters.delete(waiter); };
-      this.waiters.add(waiter);
-    });
-  }
-
-  readDetails() {
-    const $ = (p) => document.getElementById(p + '-' + this.id).value;
-    return {
-      user_id: $('uid'),
-      user_name: $('uname'),
-      user_uniquename: $('uuniq'),
-      user_avatar_id: Number($('uavatar')) || 0,
-      user_level: Number($('ulevel')) || 0
-    };
-  }
-
-  rotateUserId() {
-    const el = document.getElementById('uid-' + this.id);
-    el.value = this.id.toLowerCase() + '_' + rand(6);
-    return el.value;
-  }
-
-  isConnected() { return !!(this.socket && this.socket.connected); }
-  close() { this.disconnect(); }
-
-  async sendRaw(event, payload) {
-    if (!this.isConnected()) throw new Error(`کلاینت ${this.id} متصل نیست`);
-    const data = await encryptPayload(payload);
-    this.log('out', '→ ' + event, payload);
-    this.socket.emit(event, data);
-  }
-
-  // ارسال خام و رمزنشده — فقط برای تست مقاومت سرور به ورودی خراب
-  emitRaw(event, rawString) {
-    if (!this.isConnected()) throw new Error(`کلاینت ${this.id} متصل نیست`);
-    this.log('out', '→ ' + event + ' (خام و رمزنشده)', rawString);
-    this.socket.emit(event, rawString);
-  }
-
-  async sendUserDetails() {
-    const promise = this.waitFor(p => p && p.type === 'get_privious_public_chats', 'get_privious_public_chats');
-    await this.sendRaw('get_user_details', this.readDetails());
-    return promise;
-  }
-
-  async joinRoom(roomName) {
-    if (!roomName) throw new Error('نام اتاق خالی است');
-    const promise = this.waitFor(p => p && p.type === 'get_privious_private_chats', 'get_privious_private_chats');
-    await this.sendRaw('join_chat_room', { room_name: roomName });
-    return promise;
-  }
-
-  async sendMessage(roomName, message) {
-    if (!roomName) throw new Error('نام اتاق خالی است');
-    // سرور با socket.to(room) پخش می‌کند، پس فرستنده پیام خودش را دریافت نمی‌کند
-    await this.sendRaw('send_chat_message', { room_name: roomName, message });
-  }
-}
-
-// کلاینت موقت و بدون UI، برای تست‌هایی که به یک اتصال تازه نیاز دارند
-class TempClient {
-  constructor() { this.id = 'TEMP'; this.waiters = new Set(); this.chain = Promise.resolve(); }
-  connect() {
-    this.socket = io(CFG.serverUrl, { forceNew: true, transports: ['websocket', 'polling'] });
-    this.socket.on('get_data', (raw) => {
-      this.chain = this.chain.then(async () => {
-        if (!raw || typeof raw.data !== 'string') return;
-        const payload = await decryptPayload(raw.data).catch(() => null);
-        if (payload) this.waiters.forEach(w => w(payload));
-      });
-    });
-    return new Promise((resolve, reject) => {
-      const t = setTimeout(() => reject(new Error('اتصال موقت تایم‌اوت شد')), 10000);
-      this.socket.on('connect', () => { clearTimeout(t); resolve(); });
-      this.socket.on('connect_error', (e) => { clearTimeout(t); reject(new Error('connect_error: ' + e.message)); });
-    });
-  }
-  waitFor(p, l, t = 9000) { return TestClient.prototype.waitFor.call(this, p, l, t); }
-  isConnected() { return !!(this.socket && this.socket.connected); }
-  async sendRaw(event, payload) { this.socket.emit(event, await encryptPayload(payload)); }
-  emitRaw(event, rawString) { this.socket.emit(event, rawString); }
-  close() { if (this.socket) this.socket.disconnect(); }
-}
-
-// ===================== سناریوها =====================
-// از /lib/scenarios.js می‌آیند — دقیقاً همان فایلی که CLI استفاده می‌کند،
-// تا نسخه مرورگر و نسخه خط فرمان هرگز از هم جدا نیفتند.
-const SCENARIOS = HokmScenarios.SCENARIOS;
-let A = null, B = null;
-
-async function makeTempClient() {
-  const t = new TempClient();
-  await t.connect();
-  return t;
-}
-
-function resetResults() {
-  document.querySelector('#results tbody').innerHTML = SCENARIOS.map((s, i) => `
-    <tr>
-      <td>${i + 1}</td>
-      <td>${s.title}</td>
-      <td><span class="badge skip" id="res-${i}">اجرا نشده</span></td>
-      <td class="detail" id="det-${i}">—</td>
-    </tr>`).join('');
-}
-
-async function runAllScenarios() {
-  const btn = document.getElementById('runAll');
+async function connect() {
+  const btn = $('btnConnect');
   btn.disabled = true;
-  resetResults();
+  banner('');
 
-  // هر بار ctx تازه، تا وضعیت اجرای قبلی نشت نکند
-  const ctx = { A, B, makeTempClient, publicRoom: CFG.publicRoom, state: {} };
-  for (const client of [A, B]) if (!client.isConnected()) await client.connect();
-
-  for (let i = 0; i < SCENARIOS.length; i++) {
-    const badge = document.getElementById('res-' + i);
-    const detail = document.getElementById('det-' + i);
-    badge.className = 'badge run'; badge.textContent = 'در حال اجرا'; detail.textContent = '…';
-    try {
-      const info = await SCENARIOS[i].run(ctx);
-      badge.className = 'badge pass'; badge.textContent = 'موفق';
-      detail.textContent = info || 'ok';
-    } catch (err) {
-      badge.className = 'badge fail'; badge.textContent = 'ناموفق';
-      detail.textContent = err.message + (SCENARIOS[i].hint ? '\n↳ ' + SCENARIOS[i].hint : '');
-    }
-  }
-  btn.disabled = false;
-}
-
-// ===================== راه‌اندازی =====================
-async function connectToServer() {
-  const btn = document.getElementById('btnConnect');
-  const info = document.getElementById('serverInfo');
-  const hint = document.getElementById('serverHint');
-  btn.disabled = true;
-  hint.innerHTML = '';
-
-  CFG.serverUrl  = document.getElementById('serverUrl').value.trim().replace(/\/$/, '');
-  CFG.aesKey     = document.getElementById('aesKey').value;
-  CFG.publicRoom = document.getElementById('publicRoom').value.trim() || DEFAULTS.publicRoom;
+  CFG.serverUrl  = $('serverUrl').value.trim().replace(/\/$/, '');
+  CFG.aesKey     = $('aesKey').value;
+  CFG.publicRoom = $('publicRoom').value.trim() || DEFAULTS.publicRoom;
+  CFG.myName     = $('myName').value.trim() || 'من';
+  ME.details.user_name = CFG.myName;
 
   try {
     if (!/^https?:\/\//.test(CFG.serverUrl)) throw new Error('آدرس باید با http:// شروع شود');
     if (CFG.aesKey.length !== 32) throw new Error(`کلید AES باید دقیقاً ۳۲ کاراکتر باشد (الان ${CFG.aesKey.length} است)`);
 
-    info.textContent = 'در حال بررسی سرور…';
-
-    // تست سریع رمزنگاری با همین کلید
     const probe = await decryptPayload(await encryptPayload({ ping: 1 }));
     if (!probe || probe.ping !== 1) throw new Error('تست رمزنگاری محلی شکست خورد');
 
     await loadSocketIoClient(CFG.serverUrl);
+    await Promise.all([ME.connect(), WATCH.connect()]);
 
-    let health = null;
-    try { health = await fetch(CFG.serverUrl + '/').then(r => r.json()); } catch (e) { /* CORS یا مسیر ندارد */ }
-
-    info.textContent =
-      `server = ${CFG.serverUrl}\n` +
-      `public_room = ${CFG.publicRoom}   cooldown = ${COOLDOWN_SECONDS}s\n` +
-      (health ? `health: status=${health.status} pid=${health.pid} port=${health.port}` : 'health: در دسترس نبود (مهم نیست)');
-
+    currentRoom = CFG.publicRoom;
+    isPublic = true;
+    trackMyIds();
+    $('roomName').textContent = 'اتاق عمومی: ' + currentRoom;
+    setConnected(true);
     saveSettings();
 
-    if (!A) { A = new TestClient('A'); B = new TestClient('B'); resetResults(); }
-    document.getElementById('workArea').classList.remove('disabled-area');
+    const tr = ME.transport();
+    $('chipTransport').textContent = 'transport: ' + tr;
+    $('chipTransport').className = 'chip ' + (tr === 'websocket' ? 'on' : 'warn');
+    $('chipMe').textContent = 'کاربر: ' + ME.details.user_id;
 
-    await Promise.all([A.connect(), B.connect()]);
-    hint.innerHTML = '<div class="hint warn">هر دو کلاینت وصل شدند. برای شروع «اجرای همه تست‌ها» را بزنید.</div>';
+    if (tr !== 'websocket') {
+      banner('warn', 'ارتقا به WebSocket انجام نشد و ارتباط روی polling مانده است. کار می‌کند ولی کند و پرمصرف است — معمولاً یعنی nginx هدرهای Upgrade را پاس نمی‌دهد.');
+    }
+
+    await goPublic();
+    $('msgInput').focus();
   } catch (err) {
-    info.textContent = 'اتصال ناموفق.';
-    hint.innerHTML = '<div class="hint bad">' + escapeHtml(err.message) + '</div>';
+    setConnected(false);
+    banner('bad', err.message);
+    log('err', 'اتصال ناموفق: ' + err.message);
   } finally {
     btn.disabled = false;
   }
 }
 
-document.getElementById('btnConnect').onclick = connectToServer;
-document.getElementById('runAll').onclick = runAllScenarios;
-document.getElementById('btnReset').onclick = resetResults;
+// ===================== تست‌های خودکار (اختیاری) =====================
+const SCENARIOS = HokmScenarios.SCENARIOS;
+
+function resetTests() {
+  document.querySelector('#results tbody').innerHTML = SCENARIOS.map((s, i) => `
+    <tr><td style="width:24px">${i + 1}</td><td>${s.title}</td>
+    <td style="width:80px"><span class="badge skip" id="res-${i}">—</span></td></tr>
+    <tr><td colspan="3" class="detail" id="det-${i}"></td></tr>`).join('');
+}
+
+async function runTests() {
+  const btn = $('runAll');
+  btn.disabled = true;
+  resetTests();
+
+  // کلاینت‌های جدا می‌سازیم تا چت زنده شما به هم نریزد
+  const A = new Client('A', { user_id: 'ta_' + rand(6), user_name: 'tester_A', user_uniquename: 'uniq_ta', user_avatar_id: 3, user_level: 12 });
+  const B = new Client('B', { user_id: 'tb_' + rand(6), user_name: 'tester_B', user_uniquename: 'uniq_tb', user_avatar_id: 4, user_level: 7 });
+  const temps = [];
+  const makeTempClient = async () => {
+    const t = new Client('T' + (temps.length + 1), { user_id: 'tmp_' + rand(6), user_name: 'tmp' });
+    temps.push(t);
+    await t.connect();
+    return t;
+  };
+
+  try {
+    await Promise.all([A.connect(), B.connect()]);
+    await Promise.all([A.sendUserDetails(), B.sendUserDetails()]);
+
+    const ctx = { A, B, makeTempClient, publicRoom: CFG.publicRoom, state: {} };
+    for (let i = 0; i < SCENARIOS.length; i++) {
+      const badge = $('res-' + i), detail = $('det-' + i);
+      badge.className = 'badge run'; badge.textContent = 'اجرا';
+      try {
+        detail.textContent = (await SCENARIOS[i].run(ctx)) || 'ok';
+        badge.className = 'badge pass'; badge.textContent = 'موفق';
+      } catch (err) {
+        badge.className = 'badge fail'; badge.textContent = 'ناموفق';
+        detail.textContent = err.message + (SCENARIOS[i].hint ? '\n↳ ' + SCENARIOS[i].hint : '');
+      }
+    }
+  } catch (err) {
+    log('err', 'اجرای تست‌ها ناموفق: ' + err.message);
+  } finally {
+    [A, B, ...temps].forEach(cl => cl.close());
+    btn.disabled = false;
+  }
+}
+
+// ===================== اتصال رویدادها =====================
+$('btnConnect').onclick = connect;
+$('btnSend').onclick = () => sendCurrent().catch(err => log('err', err.message));
+$('msgInput').addEventListener('keydown', (e) => {
+  if (e.key === 'Enter') { e.preventDefault(); sendCurrent().catch(err => log('err', err.message)); }
+});
+$('btnJoin').onclick = () => joinPrivate($('roomInput').value.trim());
+$('btnPublic').onclick = () => goPublic();
+$('btnHistory').onclick = () => refreshHistory();
+$('btnNewId').onclick = async () => {
+  const id = ME.rotateUserId();
+  await ME.sendUserDetails().catch(err => log('err', err.message));
+  $('chipMe').textContent = 'کاربر: ' + id;
+  clearInterval(cooldownTimer);
+  $('btnSend').textContent = 'ارسال';
+  $('btnSend').disabled = false;
+  lastSendAt = 0;
+  log('sys', 'user_id تازه گرفته شد: ' + id + ' — کول‌داون ریست شد');
+};
+$('btnClearLog').onclick = () => { $('log').innerHTML = ''; };
+$('runAll').onclick = runTests;
+$('btnResetTests').onclick = resetTests;
+
 loadSettings();
+resetTests();
+log('sys', 'آماده. آدرس سرور و کلید AES را بدهید و «اتصال» را بزنید.');
 </script>
 </body>
 </html>
